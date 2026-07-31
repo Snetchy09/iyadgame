@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Werewolf</title>
-<!-- Include PeerJS Library for Peer-to-Peer Networking -->
+<title>Werewolf with Voice & Text Chat</title>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <style>
   :root{
@@ -18,60 +17,65 @@
     --good:#4fa88a;
     --text:#e8e6df;
     --dim:#868b96;
+    --voice-active:#38bdf8;
+    --speaking-glow:#22c55e;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
   html,body{height:100%;}
   body{
     margin:0;
-    background:
-      radial-gradient(ellipse at 50% -10%, #1b2030 0%, var(--ink) 55%);
+    background: radial-gradient(ellipse at 50% -10%, #1b2030 0%, var(--ink) 55%);
     color:var(--text);
     font-family: Georgia, 'Iowan Old Style', serif;
     min-height:100vh;
-    padding:20px 14px 60px;
+    padding:16px 12px 100px;
   }
   body[dir="rtl"]{ font-family:'Tahoma','Segoe UI',Georgia,serif; }
-  .wrap{max-width:640px; margin:0 auto;}
-  .langbar{display:flex; justify-content:center; gap:8px; margin-bottom:16px;}
+  .wrap{max-width:680px; margin:0 auto;}
+  
+  .langbar{display:flex; justify-content:center; gap:8px; margin-bottom:12px;}
   .langbtn{
     font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.1em;
     padding:6px 14px; border:1px solid var(--line); color:var(--dim);
-    background:transparent; border-radius:20px; cursor:pointer;
+    background:transparent; border-radius:20px; cursor:pointer; transition:all 0.2s;
   }
-  .langbtn.active{border-color:var(--moon-dim); color:var(--moon);}
+  .langbtn.active{border-color:var(--moon-dim); color:var(--moon); background:rgba(217,201,138,0.08);}
   #banner{display:none; background:#3a2323; border:1px solid var(--blood); color:#f0d9d6; font-size:12.5px; padding:10px 14px; border-radius:4px; margin-bottom:14px; font-family:'Courier New',monospace; text-align:center;}
   .eyebrow{font-family:'Courier New', monospace; letter-spacing:0.28em; text-transform:uppercase; font-size:11px; color:var(--moon-dim); text-align:center; margin-bottom:6px;}
   body[dir="rtl"] .eyebrow{letter-spacing:0.08em;}
-  h1{text-align:center; font-size:30px; margin:0 0 4px; font-weight:400;}
+  h1{text-align:center; font-size:28px; margin:0 0 4px; font-weight:400;}
   h1 span{color:var(--moon);}
-  .sub{text-align:center; color:var(--dim); font-size:13px; margin-bottom:22px; font-family:'Courier New', monospace;}
+  .sub{text-align:center; color:var(--dim); font-size:13px; margin-bottom:18px; font-family:'Courier New', monospace;}
   body[dir="rtl"] .sub{font-family:inherit;}
-  .card{background:var(--paper); border:1px solid var(--line); border-radius:3px; padding:22px; position:relative; margin-bottom:16px;}
+
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:18px; position:relative; margin-bottom:16px; box-shadow:0 4px 20px rgba(0,0,0,0.4);}
   .card::before{content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg, transparent, var(--moon-dim), transparent);}
-  label{display:block; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); margin-bottom:8px; margin-top:16px;}
+  label{display:block; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); margin-bottom:6px; margin-top:14px;}
   body[dir="rtl"] label{font-family:inherit; letter-spacing:0.02em;}
   label:first-child{margin-top:0;}
-  input, select{width:100%; background:var(--paper2); border:1px solid var(--line); color:var(--text); padding:12px 13px; font-size:16px; font-family:Georgia,serif; border-radius:2px; outline:none;}
+  input, select{width:100%; background:var(--paper2); border:1px solid var(--line); color:var(--text); padding:11px 12px; font-size:15px; font-family:Georgia,serif; border-radius:4px; outline:none; transition:border-color 0.2s;}
   body[dir="rtl"] input, body[dir="rtl"] select{font-family:inherit; text-align:right;}
   input:focus, select:focus{border-color:var(--moon-dim);}
   input::placeholder{color:#565c68;}
-  button{width:100%; padding:14px; background:var(--moon); color:#141414; border:none; font-family:'Courier New', monospace; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; font-size:13px; border-radius:2px; margin-top:18px; cursor:pointer;}
+  button{width:100%; padding:13px; background:var(--moon); color:#141414; border:none; font-family:'Courier New', monospace; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; font-size:13px; border-radius:4px; margin-top:14px; cursor:pointer; transition:transform 0.1s, opacity 0.2s;}
   body[dir="rtl"] button{font-family:inherit; letter-spacing:0.02em;}
-  button:active{opacity:0.75;}
+  button:active{transform:scale(0.98); opacity:0.85;}
   button.ghost{background:transparent; border:1px solid var(--line); color:var(--text);}
   button.danger{background:var(--blood); color:#fff;}
-  button.small{margin-top:10px; padding:10px; font-size:11px;}
-  button:disabled{opacity:0.35;}
+  button.small{margin-top:8px; padding:9px; font-size:11px;}
+  button:disabled{opacity:0.35; cursor:not-allowed; transform:none;}
+
   .choice-grid{display:flex; gap:10px; margin-top:6px;}
-  .choice{flex:1; border:1px solid var(--line); background:var(--paper2); padding:20px 8px; text-align:center; border-radius:2px; cursor:pointer; font-family:'Courier New', monospace; text-transform:uppercase; font-size:12px; color:var(--dim);}
+  .choice{flex:1; border:1px solid var(--line); background:var(--paper2); padding:16px 8px; text-align:center; border-radius:4px; cursor:pointer; font-family:'Courier New', monospace; text-transform:uppercase; font-size:11px; color:var(--dim); transition:border-color 0.2s;}
+  .choice:hover{border-color:var(--moon-dim);}
   body[dir="rtl"] .choice{font-family:inherit; letter-spacing:0;}
-  .choice b{display:block; font-family:Georgia,serif; font-size:19px; color:var(--text); text-transform:none; margin-bottom:4px;}
+  .choice b{display:block; font-family:Georgia,serif; font-size:18px; color:var(--text); text-transform:none; margin-bottom:4px;}
   body[dir="rtl"] .choice b{font-family:inherit;}
-  .code-display{text-align:center; font-family:'Courier New', monospace; letter-spacing:0.35em; font-size:34px; color:var(--moon); margin:6px 0 4px; direction:ltr;}
+  .code-display{text-align:center; font-family:'Courier New', monospace; letter-spacing:0.35em; font-size:32px; color:var(--moon); margin:6px 0 4px; direction:ltr;}
   .plist{list-style:none; padding:0; margin:12px 0 0;}
-  .plist li{display:flex; align-items:center; justify-content:space-between; padding:10px 4px; border-bottom:1px solid var(--line); font-size:15px;}
+  .plist li{display:flex; align-items:center; justify-content:space-between; padding:10px 6px; border-bottom:1px solid var(--line); font-size:14.5px;}
   .plist li:last-child{border-bottom:none;}
-  .dot{width:7px; height:7px; border-radius:50%; background:var(--moon); display:inline-block; margin-inline-end:9px;}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--moon); display:inline-block; margin-inline-end:10px;}
   .empty{color:var(--dim); font-size:13px; font-family:'Courier New', monospace; text-align:center; padding:16px 0;}
   .err{color:var(--blood); font-size:12px; font-family:'Courier New', monospace; margin-top:10px; text-align:center; min-height:14px;}
   .back{text-align:center; margin-top:14px; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.1em; color:var(--dim); cursor:pointer; text-decoration:underline;}
@@ -79,42 +83,79 @@
   .pulse{animation:pulse 1.6s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
 
-  /* Flip card */
-  .flipzone{display:flex; justify-content:center; padding:14px 0 6px;}
-  .flipcard{width:200px; height:280px; perspective:1200px; cursor:pointer;}
+  .flipzone{display:flex; justify-content:center; padding:10px 0 6px;}
+  .flipcard{width:190px; height:260px; perspective:1200px; cursor:pointer;}
   .flipinner{position:relative; width:100%; height:100%; transition:transform .7s cubic-bezier(.4,.2,.2,1); transform-style:preserve-3d;}
   .flipcard.flipped .flipinner{transform:rotateY(180deg);}
   .face{position:absolute; inset:0; backface-visibility:hidden; border-radius:10px; border:1px solid var(--moon-dim); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; text-align:center;}
-  .face.front{background:
-      repeating-linear-gradient(135deg, #1b2030, #1b2030 8px, #171b25 8px, #171b25 16px);
-    box-shadow:inset 0 0 40px rgba(0,0,0,0.6);
-  }
-  .face.front .moonicon{font-size:52px; filter:drop-shadow(0 0 14px rgba(217,201,138,0.5));}
-  .face.front .tapline{margin-top:14px; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.15em; color:var(--moon-dim); text-transform:uppercase;}
+  .face.front{background: repeating-linear-gradient(135deg, #1b2030, #1b2030 8px, #171b25 8px, #171b25 16px); box-shadow:inset 0 0 40px rgba(0,0,0,0.6);}
+  .face.front .moonicon{font-size:48px; filter:drop-shadow(0 0 14px rgba(217,201,138,0.5));}
+  .face.front .tapline{margin-top:12px; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.15em; color:var(--moon-dim); text-transform:uppercase;}
   body[dir="rtl"] .face.front .tapline{font-family:inherit; letter-spacing:0.02em;}
   .face.back{background:var(--paper2); transform:rotateY(180deg);}
-  .face.back .roleicon{font-size:56px; margin-bottom:8px;}
-  .face.back .rolename{font-size:23px; color:var(--moon); margin-bottom:8px;}
-  .face.back .roledesc{font-size:12.5px; color:var(--dim); line-height:1.5;}
+  .face.back .roleicon{font-size:52px; margin-bottom:6px;}
+  .face.back .rolename{font-size:22px; color:var(--moon); margin-bottom:6px;}
+  .face.back .roledesc{font-size:12px; color:var(--dim); line-height:1.45;}
 
-  /* Player card grid */
-  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(96px,1fr)); gap:10px; margin-top:12px;}
-  .pcard{position:relative; background:var(--paper2); border:1.5px solid var(--line); border-radius:6px; padding:12px 6px 10px; text-align:center; cursor:pointer; transition:border-color .15s;}
-  .pcard .av{font-size:26px; margin-bottom:6px;}
-  .pcard .nm{font-size:12.5px; color:var(--text); word-break:break-word;}
-  .pcard.selected{border-color:var(--moon); box-shadow:0 0 0 1px var(--moon);}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(92px,1fr)); gap:10px; margin-top:10px;}
+  .pcard{position:relative; background:var(--paper2); border:1.5px solid var(--line); border-radius:6px; padding:10px 4px 8px; text-align:center; cursor:pointer; transition:border-color 0.15s, box-shadow 0.2s;}
+  .pcard .av{font-size:26px; margin-bottom:4px; position:relative; display:inline-block;}
+  .pcard .nm{font-size:12px; color:var(--text); word-break:break-word; padding:0 2px;}
+  .pcard.selected{border-color:var(--moon); box-shadow:0 0 0 2px var(--moon);}
   .pcard.dead{opacity:0.45;}
   .pcard.disabled{cursor:default;}
-  .pcard .skull{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:28px; background:rgba(10,10,12,0.55); border-radius:6px;}
-  .pcard .rolebadge{position:absolute; top:-6px; inset-inline-end:-6px; font-size:15px; background:var(--paper); border:1px solid var(--line); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center;}
+  .pcard.speaking{border-color:var(--speaking-glow); box-shadow:0 0 12px rgba(34,197,94,0.6);}
+  .pcard .speaking-wave{position:absolute; top:-4px; right:-4px; background:var(--speaking-glow); color:#000; font-size:10px; width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; animation:popSpeak 0.6s infinite alternate;}
+  @keyframes popSpeak { from{transform:scale(0.8);} to{transform:scale(1.2);} }
+  .pcard .skull{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:26px; background:rgba(10,10,12,0.6); border-radius:6px;}
+  .pcard .rolebadge{position:absolute; top:-6px; inset-inline-end:-6px; font-size:14px; background:var(--paper); border:1px solid var(--line); border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center;}
 
-  /* Log */
-  .log{max-height:190px; overflow-y:auto; background:var(--paper2); border:1px solid var(--line); border-radius:3px; padding:12px 14px; font-size:13.5px; line-height:1.7;}
-  .log .entry{border-bottom:1px dashed #262b35; padding:6px 0;}
+  .tab-bar{display:flex; border-bottom:1px solid var(--line); margin-bottom:12px;}
+  .tab-item{flex:1; text-align:center; padding:8px 4px; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--dim); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s;}
+  body[dir="rtl"] .tab-item{font-family:inherit;}
+  .tab-item.active{color:var(--moon); border-bottom-color:var(--moon);}
+  .tab-item .badge{background:var(--blood); color:#fff; font-size:9px; padding:1px 5px; border-radius:10px; margin-inline-start:4px;}
+
+  .log{max-height:180px; overflow-y:auto; background:var(--paper2); border:1px solid var(--line); border-radius:4px; padding:10px 12px; font-size:13px; line-height:1.6;}
+  .log .entry{border-bottom:1px dashed #262b35; padding:5px 0;}
   .log .entry:last-child{border-bottom:none;}
   .log .entry.death{color:var(--blood);}
   .log .entry.safe{color:var(--good);}
   .log .entry.win{color:var(--moon); font-weight:bold;}
+
+  .chat-panel{display:flex; flex-direction:column; height:200px; background:var(--paper2); border:1px solid var(--line); border-radius:4px; overflow:hidden;}
+  .chat-messages{flex:1; overflow-y:auto; padding:10px; font-size:13px; display:flex; flex-direction:column; gap:6px;}
+  .chat-msg{background:rgba(255,255,255,0.03); border:1px solid var(--line); padding:6px 10px; border-radius:6px; max-width:88%; word-break:break-word;}
+  .chat-msg.mine{align-self:flex-end; background:rgba(217,201,138,0.1); border-color:var(--moon-dim);}
+  .chat-msg.wolf{border-color:var(--blood); background:rgba(184,68,58,0.15);}
+  .chat-sender{font-size:10px; font-family:'Courier New', monospace; color:var(--dim); margin-bottom:2px;}
+  .chat-text{color:var(--text); line-height:1.35;}
+  .chat-input-box{display:flex; gap:6px; padding:8px; border-top:1px solid var(--line); background:var(--paper);}
+  .chat-input-box input{flex:1; padding:8px 10px; font-size:13px;}
+  .chat-input-box button{width:auto; margin-top:0; padding:8px 14px; font-size:11px;}
+
+  /* Floating persistent Voice Chat bar */
+  .voice-bar{
+    position:fixed; bottom:0; left:0; right:0; z-index:100;
+    background:#101319; border-top:1px solid var(--line);
+    padding:10px 14px; display:flex; align-items:center; justify-content:space-between;
+    box-shadow:0 -4px 20px rgba(0,0,0,0.6); backdrop-filter:blur(10px);
+  }
+  .voice-status{display:flex; align-items:center; gap:8px; font-size:12px; font-family:'Courier New', monospace; color:var(--dim);}
+  body[dir="rtl"] .voice-status{font-family:inherit;}
+  .v-indicator{width:10px; height:10px; border-radius:50%; background:var(--dim);}
+  .v-indicator.active{background:var(--speaking-glow); box-shadow:0 0 8px var(--speaking-glow);}
+  .v-indicator.muted{background:var(--blood);}
+  .voice-btns{display:flex; gap:6px;}
+  .v-btn{
+    background:var(--paper2); border:1px solid var(--line); color:var(--text);
+    padding:6px 12px; border-radius:20px; font-size:12px; font-family:'Courier New', monospace;
+    cursor:pointer; display:flex; align-items:center; gap:4px; margin-top:0; width:auto;
+  }
+  body[dir="rtl"] .v-btn{font-family:inherit;}
+  .v-btn.primary{background:var(--moon); color:#141414; border-color:var(--moon); font-weight:bold;}
+  .v-btn.active{border-color:var(--speaking-glow); color:var(--speaking-glow);}
+  .v-btn.danger{background:var(--blood); border-color:var(--blood); color:#fff;}
 
   .roletag{display:inline-flex; align-items:center; gap:6px; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--moon); border:1px solid var(--moon-dim); padding:4px 10px; border-radius:20px; margin-bottom:6px;}
   body[dir="rtl"] .roletag{font-family:inherit; letter-spacing:0.02em;}
@@ -133,24 +174,47 @@
   <div id="content"></div>
 </div>
 
+<!-- Floating voice chat panel -->
+<div class="voice-bar" id="voiceBar">
+  <div class="voice-status">
+    <div class="v-indicator" id="vIndicator"></div>
+    <span id="vStatusText">Voice Chat Off</span>
+  </div>
+  <div class="voice-btns" id="vBtns">
+    <button class="v-btn primary" id="btnJoinVoice">🎙️ Join Voice</button>
+  </div>
+</div>
+
 <script>
 const content = document.getElementById('content');
 const bannerEl = document.getElementById('banner');
 let lang = 'en';
-let me = { id:'p_'+Math.random().toString(36).slice(2,10), name:'', isHost:false };
+let me = { id:'p_'+Math.random().toString(36).slice(2,10), name:'', isHost:false, peerId:'' };
 let roomCode = '';
 let room = null;
 let screen = 'landing';
 let draft = { hostName:'', joinCode:'', joinName:'' };
 let flipState = { flipped:false, ready:false };
 let selection = null;
+let activeTab = 'log'; // 'log' or 'chat'
+let unreadChatCount = 0;
 
 // PeerJS Networking setup
 let peer = null;
 let hostConn = null; // Used by clients to communicate with Host
-let clientConns = []; // Used by Host to store client connections
+let clientConns = []; // Used by Host to store client data connections
+let peerCalls = {}; // Stores WebRTC Media Calls with peers { peerId: call }
 
-const PEER_PREFIX = 'ww_room_v2_';
+// Voice Chat WebRTC State
+let localAudioStream = null;
+let isMicMuted = false;
+let isDeafened = false;
+let isVoiceConnected = false;
+let audioContext = null;
+let speakingMap = {}; // { playerId: boolean }
+let remoteAudioElements = {}; // { peerId: HTMLAudioElement }
+
+const PEER_PREFIX = 'ww_room_v3_';
 
 function broadcastState() {
   if (me.isHost) {
@@ -167,12 +231,22 @@ function sendToHost(msg) {
   }
 }
 
-// ---------------- i18n ----------------
+function broadcastChatMsg(msg) {
+  if (!room.chat) room.chat = [];
+  room.chat.push(msg);
+  if (me.isHost) {
+    clientConns.forEach(c => {
+      if (c && c.open) c.send({ type: 'CHAT', message: msg });
+    });
+    render();
+  }
+}
+
 const T = {
   en:{ dir:'ltr',
     eyebrow:"When the sun sets, someone lies",
     title1:"WERE", title1accent:"WOLF",
-    subLanding:"a hidden-role game for the room you're in",
+    subLanding:"a hidden-role game for you and your friends",
     hostTitle:"Host", hostDesc:"create & run the game",
     joinTitle:"Join", joinDesc:"enter a room code",
     step1:"Step 1", back:"back",
@@ -198,8 +272,7 @@ const T = {
     needFour:"Need at least 4 players.",
     startGame:"Start Game",
     cancelRoom:"cancel room", leaveRoom:"leave room",
-    rolesPreview:(n)=>`with ${n} players`,
-    revealEyebrow:"Round "+"1", revealTitle:"Your", revealAccent:"Role",
+    revealEyebrow:"Round 1", revealTitle:"Your", revealAccent:"Role",
     subReveal:"tap the card to see who you are",
     tapReveal:"tap to reveal",
     imReady:"I'm Ready", waitingOthers:"waiting for the host to start",
@@ -214,12 +287,11 @@ const T = {
     submitChoice:"Confirm Choice",
     choiceLocked:"Choice locked in.",
     waitingNight:"It's night. Special roles are acting. Sit tight.",
-    villagerNightNote:"Villagers have no night power — just wait for dawn.",
+    villagerNightNote:"Villagers have no night power — talk or wait for dawn.",
     auraResultGood:"aura is calm. They seem GOOD.",
     auraResultBad:"aura is dark. They seem BAD.",
     nightProgress:(a,b)=>`${a} / ${b} night actions submitted`,
     resolveNight:"Resolve Night (Host)",
-    forceResolve:"Force Resolve",
     dayEyebrow:(r)=>`Day ${r}`,
     dayTitle:"Dawn", dayAccent:"Breaks",
     continueToVote:"Continue to Voting",
@@ -239,6 +311,13 @@ const T = {
     finalRoles:"Final Roles",
     playAgain:"Play Again (Host)",
     exitGame:"exit to menu",
+    logTab:"Game Log", chatTab:"Text Chat",
+    voiceOff:"Voice Chat Off", voiceConn:"Connected",
+    joinVoice:"🎙️ Join Voice", leaveVoice:"Leave Voice",
+    muteMic:"Mute", unmuteMic:"Unmute",
+    deafen:"Deafen", undeafen:"Undeafen",
+    typeMsgPH:"Type a message...", sendMsg:"Send",
+    wolfOnlyChat:"🐺 Wolf Only Chat",
     log_game_start:"Night falls on the village for the first time.",
     log_night_begin:(r)=>`Night ${r} begins. Everyone closes their eyes.`,
     log_peaceful:"The village wakes up. No one was harmed — the Doctor's watch held.",
@@ -285,7 +364,6 @@ const T = {
     needFour:"يلزم ٤ لاعبين على الأقل.",
     startGame:"ابدأ اللعبة",
     cancelRoom:"إلغاء الغرفة", leaveRoom:"مغادرة الغرفة",
-    rolesPreview:(n)=>`بعدد ${n} لاعبين`,
     revealEyebrow:"الجولة ١", revealTitle:"دورك", revealAccent:"",
     subReveal:"اضغط على البطاقة لترى من أنت",
     tapReveal:"اضغط للكشف",
@@ -301,12 +379,11 @@ const T = {
     submitChoice:"تأكيد الاختيار",
     choiceLocked:"تم تثبيت اختيارك.",
     waitingNight:"الليل الآن. أصحاب الأدوار الخاصة يتصرفون. انتظر قليلاً.",
-    villagerNightNote:"القرويون ليس لديهم قدرة ليلية — انتظروا الفجر فقط.",
+    villagerNightNote:"القرويون ليس لديهم قدرة ليلية — تحدثوا أو انتظروا الفجر.",
     auraResultGood:"هالته هادئة. يبدو أنه جيد.",
     auraResultBad:"هالته مظلمة. يبدو أنه شرير.",
     nightProgress:(a,b)=>`${a} / ${b} تصرفات ليلية مُقدَّمة`,
     resolveNight:"إنهاء الليل (المضيف)",
-    forceResolve:"إنهاء إجباري",
     dayEyebrow:(r)=>`النهار ${r}`,
     dayTitle:"الفجر", dayAccent:"يبزغ",
     continueToVote:"الانتقال إلى التصويت",
@@ -326,6 +403,13 @@ const T = {
     finalRoles:"الأدوار النهائية",
     playAgain:"العب مجددًا (المضيف)",
     exitGame:"الخروج للقائمة",
+    logTab:"سجل اللعبة", chatTab:"المحادثة",
+    voiceOff:"المحادثة الصوتية معطلة", voiceConn:"متصل",
+    joinVoice:"🎙️ انضم للصوت", leaveVoice:"مغادرة الصوت",
+    muteMic:"كتم", unmuteMic:"تشغيل المايك",
+    deafen:"تعطيل الصوت", undeafen:"تفعيل الصوت",
+    typeMsgPH:"اكتب رسالة...", sendMsg:"إرسال",
+    wolfOnlyChat:"🐺 محادثة الذئاب فقط",
     log_game_start:"يهبط الليل على القرية لأول مرة.",
     log_night_begin:(r)=>`تبدأ الليلة ${r}. يغلق الجميع أعينهم.`,
     log_peaceful:"تستيقظ القرية. لم يتأذَّ أحد — حراسة الطبيب نجحت.",
@@ -358,6 +442,7 @@ function setLang(l){
   document.body.setAttribute('dir', T[l].dir);
   document.getElementById('btnEN').classList.toggle('active', l==='en');
   document.getElementById('btnAR').classList.toggle('active', l==='ar');
+  updateVoiceBarUI();
   render();
 }
 document.getElementById('btnEN').onclick=()=>setLang('en');
@@ -371,12 +456,171 @@ function randCode(){
 function showErr(id, msg){ const e=document.getElementById(id); if(e) e.textContent = msg; }
 
 function resetPeer() {
+  stopVoiceChat();
   if (peer) { peer.destroy(); peer = null; }
   clientConns = [];
   hostConn = null;
 }
 
-// ---------------- role assignment ----------------
+async function startVoiceChat() {
+  try {
+    localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    isVoiceConnected = true;
+    setupAudioAnalysis(localAudioStream, me.id);
+    
+    // Listen for incoming calls from peers
+    if (peer) {
+      peer.on('call', (call) => {
+        call.answer(localAudioStream);
+        call.on('stream', (remoteStream) => {
+          handleRemoteStream(call.peer, remoteStream);
+        });
+        peerCalls[call.peer] = call;
+      });
+    }
+
+    // Call all existing peers in room
+    connectVoiceToRoomPeers();
+    updateVoiceBarUI();
+    render();
+  } catch (err) {
+    console.error("Microphone access denied or error:", err);
+    alert(lang === 'ar' ? "لم نتمكن من الوصول للمايكروفون. يرجى السماح بالصلاحيات." : "Could not access microphone. Please allow mic permissions.");
+  }
+}
+
+function connectVoiceToRoomPeers() {
+  if (!room || !room.players || !localAudioStream || !peer) return;
+  room.players.forEach(p => {
+    if (p.peerId && p.peerId !== me.peerId && !peerCalls[p.peerId]) {
+      const call = peer.call(p.peerId, localAudioStream);
+      if (call) {
+        call.on('stream', (remoteStream) => {
+          handleRemoteStream(p.peerId, remoteStream);
+        });
+        peerCalls[p.peerId] = call;
+      }
+    }
+  });
+}
+
+function handleRemoteStream(peerId, remoteStream) {
+  if (!remoteAudioElements[peerId]) {
+    const audio = document.createElement('audio');
+    audio.autoplay = true;
+    audio.srcObject = remoteStream;
+    audio.muted = isDeafened;
+    document.body.appendChild(audio);
+    remoteAudioElements[peerId] = audio;
+
+    // Find player ID associated with this peer ID
+    const targetPlayer = room ? room.players.find(p => p.peerId === peerId) : null;
+    const targetId = targetPlayer ? targetPlayer.id : peerId;
+    setupAudioAnalysis(remoteStream, targetId);
+  }
+}
+
+function toggleMic() {
+  if (!localAudioStream) return;
+  isMicMuted = !isMicMuted;
+  localAudioStream.getAudioTracks().forEach(track => { track.enabled = !isMicMuted; });
+  if (isMicMuted) speakingMap[me.id] = false;
+  updateVoiceBarUI();
+  render();
+}
+
+function toggleDeafen() {
+  isDeafened = !isDeafened;
+  Object.values(remoteAudioElements).forEach(audio => { audio.muted = isDeafened; });
+  updateVoiceBarUI();
+}
+
+function stopVoiceChat() {
+  if (localAudioStream) {
+    localAudioStream.getTracks().forEach(track => track.stop());
+    localAudioStream = null;
+  }
+  Object.values(peerCalls).forEach(call => call.close());
+  peerCalls = {};
+  Object.values(remoteAudioElements).forEach(audio => audio.remove());
+  remoteAudioElements = {};
+  isVoiceConnected = false;
+  speakingMap = {};
+  updateVoiceBarUI();
+}
+
+function setupAudioAnalysis(stream, playerId) {
+  try {
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const checkVolume = () => {
+      if (!isVoiceConnected) return;
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+      let average = sum / bufferLength;
+
+      const isSpeakingNow = average > 18 && !(playerId === me.id && isMicMuted);
+      if (speakingMap[playerId] !== isSpeakingNow) {
+        speakingMap[playerId] = isSpeakingNow;
+        updateSpeakingUI(playerId, isSpeakingNow);
+      }
+      requestAnimationFrame(checkVolume);
+    };
+    checkVolume();
+  } catch (e) {
+    console.error("Audio analysis setup failed", e);
+  }
+}
+
+function updateSpeakingUI(playerId, isSpeaking) {
+  const card = document.querySelector(`.pcard[data-id="${playerId}"]`);
+  if (card) {
+    card.classList.toggle('speaking', isSpeaking);
+    let wave = card.querySelector('.speaking-wave');
+    if (isSpeaking && !wave) {
+      wave = document.createElement('div');
+      wave.className = 'speaking-wave';
+      wave.innerHTML = '🔊';
+      card.appendChild(wave);
+    } else if (!isSpeaking && wave) {
+      wave.remove();
+    }
+  }
+}
+
+function updateVoiceBarUI() {
+  const s = t();
+  const ind = document.getElementById('vIndicator');
+  const txt = document.getElementById('vStatusText');
+  const btns = document.getElementById('vBtns');
+
+  if (!isVoiceConnected) {
+    ind.className = 'v-indicator';
+    txt.textContent = s.voiceOff;
+    btns.innerHTML = `<button class="v-btn primary" id="btnJoinVoice">${s.joinVoice}</button>`;
+    document.getElementById('btnJoinVoice').onclick = startVoiceChat;
+  } else {
+    ind.className = `v-indicator ${isMicMuted ? 'muted' : 'active'}`;
+    txt.textContent = isMicMuted ? s.muteMic : s.voiceConn;
+    btns.innerHTML = `
+      <button class="v-btn ${isMicMuted ? 'danger' : ''}" id="btnMute">${isMicMuted ? s.unmuteMic : s.muteMic}</button>
+      <button class="v-btn ${isDeafened ? 'danger' : ''}" id="btnDeafen">${isDeafened ? s.undeafen : s.deafen}</button>
+      <button class="v-btn ghost" id="btnLeaveVoice">✕</button>
+    `;
+    document.getElementById('btnMute').onclick = toggleMic;
+    document.getElementById('btnDeafen').onclick = toggleDeafen;
+    document.getElementById('btnLeaveVoice').onclick = stopVoiceChat;
+  }
+}
+
 function assignRoles(playerIds){
   const n = playerIds.length;
   const wolves = n>=10?3:(n>=6?2:1);
@@ -401,7 +645,6 @@ function aliveWolves(r){ return aliveIds(r).filter(id=>r.roles[id]==='werewolf')
 function playerName(r,id){ const p=r.players.find(p=>p.id===id); return p?p.name:'?'; }
 function roleName(r,id){ return t().roles[r.roles[id]].name; }
 
-// ---------------- render dispatcher ----------------
 function render(){
   if(!roomCode){
     if(screen==='hostSetup') return renderHostSetup();
@@ -426,7 +669,6 @@ function renderLoading(){
   content.innerHTML = `<div class="sub pulse center">…</div>`;
 }
 
-// ---------------- landing / setup ----------------
 function renderLanding(){
   resetPeer(); roomCode=''; room=null;
   const s=t();
@@ -471,13 +713,14 @@ function renderHostSetup(){
 
     peer = new Peer(PEER_PREFIX + roomCode);
 
-    peer.on('open', ()=>{
+    peer.on('open', (id)=>{
+      me.peerId = id;
       room = {
         code: roomCode, phase:'lobby', round:0,
-        players:[{id:me.id, name:me.name}],
+        players:[{id:me.id, name:me.name, peerId:me.peerId}],
         roles:{}, alive:{},
         night:{wolfVotes:{}, doctorTarget:{}, seerTarget:{}},
-        votes:{}, log:[{type:'created'}],
+        votes:{}, log:[{type:'created'}], chat:[],
         hunterPending:null, winner:null
       };
       render();
@@ -496,11 +739,14 @@ function renderHostSetup(){
             conn.send({type:'ERR', msg: t().nameTaken});
             return;
           }
-          room.players.push({id: data.id, name: data.name});
+          room.players.push({id: data.id, name: data.name, peerId: data.peerId});
           conn.send({type:'JOIN_ACK', room});
           broadcastState();
+          connectVoiceToRoomPeers();
         } else if(data.type === 'ACTION') {
           handleClientAction(data);
+        } else if(data.type === 'CHAT') {
+          broadcastChatMsg(data.message);
         }
       });
     });
@@ -575,11 +821,12 @@ function renderJoinSetup(){
     roomCode = code;
 
     peer = new Peer();
-    peer.on('open', ()=>{
+    peer.on('open', (id)=>{
+      me.peerId = id;
       hostConn = peer.connect(PEER_PREFIX + roomCode);
 
       hostConn.on('open', ()=>{
-        hostConn.send({ type: 'JOIN', id: me.id, name: me.name });
+        hostConn.send({ type: 'JOIN', id: me.id, name: me.name, peerId: me.peerId });
       });
 
       hostConn.on('data', (data)=>{
@@ -588,6 +835,12 @@ function renderJoinSetup(){
           document.getElementById('joinBtn2').disabled = false;
         } else if(data.type === 'JOIN_ACK' || data.type === 'STATE') {
           room = data.room;
+          connectVoiceToRoomPeers();
+          render();
+        } else if(data.type === 'CHAT') {
+          if(!room.chat) room.chat = [];
+          room.chat.push(data.message);
+          if (activeTab !== 'chat') unreadChatCount++;
           render();
         }
       });
@@ -605,7 +858,6 @@ function renderJoinSetup(){
   };
 }
 
-// ---------------- lobby ----------------
 function renderLobby(){
   const s=t();
   const isHost = me.isHost;
@@ -636,6 +888,7 @@ function renderLobby(){
       room.phase = 'reveal';
       room.round = 1;
       room.log = [{type:'game_start'}];
+      room.chat = [];
       room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
       room.votes = {};
       room.hunterPending = null;
@@ -646,7 +899,6 @@ function renderLobby(){
   }
 }
 
-// ---------------- reveal ----------------
 let transitioning = false;
 let revealTicker = null;
 function ensureRevealTicker(){
@@ -723,19 +975,20 @@ function renderRoleBadge(){
   const myRole = room.roles[me.id];
   if(!myRole) return '';
   const alive = room.alive[me.id];
-  return `<div class="center" style="margin-bottom:14px;"><span class="roletag">${ROLE_ICON[myRole]} ${s.yourRoleLabel}: ${s.roles[myRole].name}${alive?'':' 💀'}</span></div>`;
+  return `<div class="center" style="margin-bottom:12px;"><span class="roletag">${ROLE_ICON[myRole]} ${s.yourRoleLabel}: ${s.roles[myRole].name}${alive?'':' 💀'}</span></div>`;
 }
 
-// ---------------- night ----------------
 function renderCardsGrid(playerList, opts){
   const s=t();
   const html = playerList.map(p=>{
     const isDead = !room.alive[p.id];
     const isSelected = opts.selectedId === p.id;
     const disabled = (opts.disabledIds||[]).includes(p.id) || (isDead && !opts.deadSelectable);
-    return `<div class="pcard ${isDead?'dead':''} ${isSelected?'selected':''} ${disabled?'disabled':''}" data-id="${p.id}">
+    const isSpeaking = !!speakingMap[p.id];
+    return `<div class="pcard ${isDead?'dead':''} ${isSelected?'selected':''} ${disabled?'disabled':''} ${isSpeaking?'speaking':''}" data-id="${p.id}">
       <div class="av">${avatarFor(p.id)}</div>
       <div class="nm">${p.name}${p.id===me.id?' '+s.you:''}</div>
+      ${isSpeaking ? `<div class="speaking-wave">🔊</div>` : ''}
       ${isDead && opts.showSkull!==false ? `<div class="skull">💀</div>` : ''}
       ${opts.roleBadges && opts.roleBadges[p.id] ? `<div class="rolebadge">${opts.roleBadges[p.id]}</div>` : ''}
     </div>`;
@@ -795,7 +1048,10 @@ function renderNight(){
       <div class="progress">${s.nightProgress(actorsDone, actorsNeeded)}</div>
       ${isHost ? `<button class="ghost small" id="resolveBtn">${s.resolveNight}</button>` : ''}
     </div>
+    ${renderLogAndChatPanel()}
   `;
+
+  bindLogChatEvents();
 
   document.querySelectorAll('.pcard').forEach(el=>{
     if(el.classList.contains('disabled')) return;
@@ -827,7 +1083,6 @@ function renderNight(){
 
 function resolveNight(){
   if (!me.isHost) return;
-  // tally wolf votes
   const tally = {};
   Object.values(room.night.wolfVotes).forEach(id=>{ tally[id]=(tally[id]||0)+1; });
   let victim=null, max=0;
@@ -843,7 +1098,6 @@ function resolveNight(){
   } else {
     room.log.push({type:'peaceful'});
   }
-  // hunter check
   if(died && room.roles[died]==='hunter'){
     room.hunterPending = died;
     room._returnPhase = 'night';
@@ -865,7 +1119,6 @@ function checkWin(r){
   return null;
 }
 
-// ---------------- hunter revenge ----------------
 function renderHunterRevenge(){
   const s=t();
   const isMe = room.hunterPending === me.id;
@@ -882,7 +1135,9 @@ function renderHunterRevenge(){
         <button id="shotBtn" ${!selection?'disabled':''}>${s.confirmShot}</button>
       ` : `<div class="sub center pulse">🏹</div>`}
     </div>
+    ${renderLogAndChatPanel()}
   `;
+  bindLogChatEvents();
   if(isMe){
     document.querySelectorAll('.pcard').forEach(el=>{
       if(el.classList.contains('disabled')) return;
@@ -920,26 +1175,117 @@ function renderHunterRevenge(){
   }
 }
 
-// ---------------- day reveal ----------------
-function renderLogPanel(){
+function renderLogAndChatPanel(){
   const s=t();
-  const items = (room.log||[]).map(ev=>{
-    let cls=''; let txt='';
-    switch(ev.type){
-      case 'game_start': txt=s.log_game_start; break;
-      case 'night_begin': txt=s.log_night_begin(ev.round); break;
-      case 'peaceful': txt=s.log_peaceful; cls='safe'; break;
-      case 'deaths': txt=s.log_deaths(ev.ids.map(id=>playerName(room,id)).join(', ')); cls='death'; break;
-      case 'hunter_shot': txt=s.log_hunter_shot(playerName(room,ev.a), playerName(room,ev.b)); cls='death'; break;
-      case 'vote_tie': txt=s.log_vote_tie; break;
-      case 'vote_result': txt=s.log_vote_result(playerName(room,ev.id), roleName(room,ev.id)); cls='death'; break;
-      case 'win_villagers': txt=s.log_win_villagers; cls='win'; break;
-      case 'win_wolves': txt=s.log_win_wolves; cls='win'; break;
-      default: txt='';
-    }
-    return txt ? `<div class="entry ${cls}">${txt}</div>` : '';
-  }).join('');
-  return `<div class="log">${items}</div>`;
+  const unreadBadge = unreadChatCount > 0 ? `<span class="badge">${unreadChatCount}</span>` : '';
+  
+  let chatContent = '';
+  if (activeTab === 'log') {
+    const items = (room.log||[]).map(ev=>{
+      let cls=''; let txt='';
+      switch(ev.type){
+        case 'game_start': txt=s.log_game_start; break;
+        case 'night_begin': txt=s.log_night_begin(ev.round); break;
+        case 'peaceful': txt=s.log_peaceful; cls='safe'; break;
+        case 'deaths': txt=s.log_deaths(ev.ids.map(id=>playerName(room,id)).join(', ')); cls='death'; break;
+        case 'hunter_shot': txt=s.log_hunter_shot(playerName(room,ev.a), playerName(room,ev.b)); cls='death'; break;
+        case 'vote_tie': txt=s.log_vote_tie; break;
+        case 'vote_result': txt=s.log_vote_result(playerName(room,ev.id), roleName(room,ev.id)); cls='death'; break;
+        case 'win_villagers': txt=s.log_win_villagers; cls='win'; break;
+        case 'win_wolves': txt=s.log_win_wolves; cls='win'; break;
+        default: txt='';
+      }
+      return txt ? `<div class="entry ${cls}">${txt}</div>` : '';
+    }).join('');
+    chatContent = `<div class="log" id="logContainer">${items}</div>`;
+  } else {
+    // Chat Tab
+    const myRole = room.roles[me.id];
+    const isWolf = myRole === 'werewolf';
+    const isNight = room.phase === 'night';
+    
+    const visibleMessages = (room.chat || []).filter(m => {
+      if (m.isWolfOnly) return isWolf;
+      return true;
+    });
+
+    const msgsHtml = visibleMessages.map(m => {
+      const isMine = m.senderId === me.id;
+      return `
+        <div class="chat-msg ${isMine ? 'mine' : ''} ${m.isWolfOnly ? 'wolf' : ''}">
+          <div class="chat-sender">${m.senderName} ${m.isWolfOnly ? '(🐺 Wolf Chat)' : ''}</div>
+          <div class="chat-text">${escapeHtml(m.text)}</div>
+        </div>
+      `;
+    }).join('');
+
+    chatContent = `
+      <div class="chat-panel">
+        <div class="chat-messages" id="chatMsgs">${msgsHtml}</div>
+        <div class="chat-input-box">
+          <input id="chatInput" placeholder="${s.typeMsgPH}" maxlength="150">
+          <button id="sendChatBtn">${s.sendMsg}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card" style="margin-top:10px;">
+      <div class="tab-bar">
+        <div class="tab-item ${activeTab==='log'?'active':''}" id="tabLog">${s.logTab}</div>
+        <div class="tab-item ${activeTab==='chat'?'active':''}" id="tabChat">${s.chatTab} ${unreadBadge}</div>
+      </div>
+      ${chatContent}
+    </div>
+  `;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function bindLogChatEvents() {
+  const tabLog = document.getElementById('tabLog');
+  const tabChat = document.getElementById('tabChat');
+  if (tabLog) tabLog.onclick = () => { activeTab = 'log'; render(); };
+  if (tabChat) tabChat.onclick = () => { activeTab = 'chat'; unreadChatCount = 0; render(); };
+
+  const sendBtn = document.getElementById('sendChatBtn');
+  const chatInput = document.getElementById('chatInput');
+  if (sendBtn && chatInput) {
+    const doSend = () => {
+      const txt = chatInput.value.trim();
+      if (!txt) return;
+      const myRole = room.roles[me.id];
+      const isWolfOnly = room.phase === 'night' && myRole === 'werewolf';
+
+      const msg = {
+        id: 'm_' + Math.random().toString(36).slice(2, 8),
+        senderId: me.id,
+        senderName: me.name,
+        text: txt,
+        isWolfOnly
+      };
+
+      if (me.isHost) {
+        broadcastChatMsg(msg);
+      } else {
+        sendToHost({ type: 'CHAT', message: msg });
+      }
+      chatInput.value = '';
+    };
+
+    sendBtn.onclick = doSend;
+    chatInput.onkeydown = (e) => { if (e.key === 'Enter') doSend(); };
+    
+    // Auto-scroll to bottom of chat
+    const msgsEl = document.getElementById('chatMsgs');
+    if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  const logEl = document.getElementById('logContainer');
+  if (logEl) logEl.scrollTop = logEl.scrollHeight;
 }
 
 function renderDayReveal(){
@@ -950,10 +1296,11 @@ function renderDayReveal(){
     <h1>${s.dayTitle} <span>${s.dayAccent}</span></h1>
     ${renderRoleBadge()}
     <div class="card">
-      ${renderLogPanel()}
       ${isHost ? `<button id="voteBtn">${s.continueToVote}</button>` : `<div class="sub center" style="margin-top:14px;">${s.waitingVote}</div>`}
     </div>
+    ${renderLogAndChatPanel()}
   `;
+  bindLogChatEvents();
   if(isHost){
     document.getElementById('voteBtn').onclick = ()=>{
       room.phase = 'voting';
@@ -963,7 +1310,6 @@ function renderDayReveal(){
   }
 }
 
-// ---------------- voting ----------------
 function renderVoting(){
   const s=t();
   const isHost = me.isHost;
@@ -983,7 +1329,9 @@ function renderVoting(){
       <div class="progress">${s.voteProgress(Object.keys(room.votes).length, aliveIds(room).length)}</div>
       ${isHost ? `<button class="ghost small" id="resolveVoteBtn">${s.resolveVote}</button>` : ''}
     </div>
+    ${renderLogAndChatPanel()}
   `;
+  bindLogChatEvents();
   if(amAlive && !myVote){
     document.querySelectorAll('.pcard').forEach(el=>{
       if(el.classList.contains('disabled')) return;
@@ -1044,48 +1392,42 @@ function resolveVote(){
   broadcastState();
 }
 
-// ---------------- ended ----------------
 function renderEnded(){
   const s=t();
   const isHost = me.isHost;
   const winText = room.winner==='villagers' ? s.winVillagers : s.winWolves;
   const rolesList = room.players.map(p=>{
     const dead = !room.alive[p.id];
-    return `<li><span><span class="dot"></span>${p.name}${dead?' 💀':''}</span><span style="color:var(--dim); font-family:'Courier New',monospace; font-size:12px;">${ROLE_ICON[room.roles[p.id]]} ${roleName(room,p.id)}</span></li>`;
+    return `<li><span><span class="dot"></span>${p.name}${dead?' 💀':''}</span><span style="color:var(--moon); font-family:'Courier New',monospace; font-size:12px;">${ROLE_ICON[room.roles[p.id]]} ${roleName(room, p.id)}</span></li>`;
   }).join('');
+
   content.innerHTML = `
     <div class="eyebrow">${s.endEyebrow}</div>
-    <h1 style="color:${room.winner==='villagers'?'var(--good)':'var(--blood)'}">${winText}</h1>
-    <div class="card">
-      ${renderLogPanel()}
+    <h1>${winText}</h1>
+    <div class="card" style="margin-top:16px;">
       <label>${s.finalRoles}</label>
       <ul class="plist">${rolesList}</ul>
       ${isHost ? `<button id="againBtn">${s.playAgain}</button>` : ''}
-      <button class="ghost small" id="exitBtn">${s.exitGame}</button>
     </div>
+    ${renderLogAndChatPanel()}
+    <div class="back" id="exitBtn">${s.exitGame}</div>
   `;
-  document.getElementById('exitBtn').onclick=()=>{ resetPeer(); roomCode=''; room=null; screen='landing'; flipState={flipped:false,ready:false}; render(); };
+  bindLogChatEvents();
+  document.getElementById('exitBtn').onclick = ()=>{ screen='landing'; render(); };
   if(isHost){
     document.getElementById('againBtn').onclick = ()=>{
-      const ids = room.players.map(p=>p.id);
-      room.roles = assignRoles(ids);
-      const alive={}; ids.forEach(id=>alive[id]=true);
-      room.alive = alive;
-      room.phase='reveal';
-      room.round=1;
-      room.log=[{type:'game_start'}];
-      room.night={wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
-      room.votes={};
-      room.hunterPending=null;
-      room.winner=null;
-      room.revealDeadline = Date.now() + 25000;
-      flipState={flipped:false, ready:false};
+      room.phase = 'lobby';
+      room.roles = {};
+      room.alive = {};
+      room.round = 0;
       broadcastState();
     };
   }
 }
 
-setLang('en');
+// Initial render call
+updateVoiceBarUI();
+render();
 </script>
 </body>
 </html>
