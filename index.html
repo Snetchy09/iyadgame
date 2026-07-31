@@ -189,11 +189,12 @@
 const content = document.getElementById('content');
 const bannerEl = document.getElementById('banner');
 let lang = 'en';
-let me = { id:'p_'+Math.random().toString(36).slice(2,10), name:'', isHost:false, peerId:'' };
+const AVATARS = ['🙂','😎','🤠','👻','🦊','🦁','🧙‍♂️','🕵️‍♂️','🧛‍♂️','🤖','👑','🥷'];
+let me = { id:'p_'+Math.random().toString(36).slice(2,10), name:'', avatar: AVATARS[0], isHost:false, peerId:'' };
 let roomCode = '';
 let room = null;
 let screen = 'landing';
-let draft = { hostName:'', joinCode:'', joinName:'' };
+let draft = { hostName:'', joinCode:'', joinName:'', avatar: AVATARS[0] };
 let flipState = { flipped:false, ready:false };
 let selection = null;
 let activeTab = 'log'; // 'log' or 'chat'
@@ -253,6 +254,7 @@ const T = {
     setupTitle:"New", setupAccent:"Game",
     subSetup:"you'll play too — roles are assigned once everyone's in",
     yourName:"Your name", namePH:"e.g. Sam",
+    chooseAvatar:"Choose your Avatar",
     createRoom:"Create Room",
     enterNameFirst:"Enter your name first.",
     joinTitleFull:"Join a", joinAccent:"Room",
@@ -309,7 +311,8 @@ const T = {
     endEyebrow:"Game Over",
     winVillagers:"THE VILLAGE WINS", winWolves:"THE WEREWOLVES WIN",
     finalRoles:"Final Roles",
-    playAgain:"Play Again (Host)",
+    playAgain:"Play Again",
+    waitingHostNextGame:"Waiting for host to restart...",
     exitGame:"exit to menu",
     logTab:"Game Log", chatTab:"Text Chat",
     voiceOff:"Voice Chat Off", voiceConn:"Connected",
@@ -345,6 +348,7 @@ const T = {
     setupTitle:"لعبة", setupAccent:"جديدة",
     subSetup:"ستلعب أنت أيضًا — تُوزّع الأدوار بعد انضمام الجميع",
     yourName:"اسمك", namePH:"مثال: سامي",
+    chooseAvatar:"اختر شخصيتك",
     createRoom:"إنشاء الغرفة",
     enterNameFirst:"أدخل اسمك أولاً.",
     joinTitleFull:"الانضمام إلى", joinAccent:"غرفة",
@@ -401,7 +405,8 @@ const T = {
     endEyebrow:"انتهت اللعبة",
     winVillagers:"القرية تفوز", winWolves:"الذئاب تفوز",
     finalRoles:"الأدوار النهائية",
-    playAgain:"العب مجددًا (المضيف)",
+    playAgain:"العب مجددًا",
+    waitingHostNextGame:"في انتظار المضيف لبدء لعبة جديدة...",
     exitGame:"الخروج للقائمة",
     logTab:"سجل اللعبة", chatTab:"المحادثة",
     voiceOff:"المحادثة الصوتية معطلة", voiceConn:"متصل",
@@ -428,125 +433,12 @@ const T = {
     }
   }
 };
-function t(){ return T[lang]; }
 
-const ROLE_ICON = { werewolf:'🐺', seer:'👁️', doctor:'⚕️', hunter:'🏹', villager:'🧑\u200d🌾' };
-const AVATARS = ['🙂','😎','🧑','👩','👨','🧔','👱','🧑\u200d🦱','🧑\u200d🦳','🧑\u200d🦰'];
-function avatarFor(id){
+function avatarFor(playerOrId){
+  if(typeof playerOrId === 'object' && playerOrId.avatar) return playerOrId.avatar;
+  const id = typeof playerOrId === 'string' ? playerOrId : playerOrId.id || '';
   let h=0; for(const c of id) h = (h*31 + c.charCodeAt(0))>>>0;
   return AVATARS[h % AVATARS.length];
-}
-
-function setLang(l){
-  lang = l;
-  document.body.setAttribute('dir', T[l].dir);
-  document.getElementById('btnEN').classList.toggle('active', l==='en');
-  document.getElementById('btnAR').classList.toggle('active', l==='ar');
-  updateVoiceBarUI();
-  render();
-}
-document.getElementById('btnEN').onclick=()=>setLang('en');
-document.getElementById('btnAR').onclick=()=>setLang('ar');
-
-function randCode(){
-  const c='ABCDEFGHJKLMNPQRSTUVWXYZ'; let s='';
-  for(let i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)];
-  return s;
-}
-function showErr(id, msg){ const e=document.getElementById(id); if(e) e.textContent = msg; }
-
-function resetPeer() {
-  stopVoiceChat();
-  if (peer) { peer.destroy(); peer = null; }
-  clientConns = [];
-  hostConn = null;
-}
-
-async function startVoiceChat() {
-  try {
-    localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    isVoiceConnected = true;
-    setupAudioAnalysis(localAudioStream, me.id);
-    
-    // Listen for incoming calls from peers
-    if (peer) {
-      peer.on('call', (call) => {
-        call.answer(localAudioStream);
-        call.on('stream', (remoteStream) => {
-          handleRemoteStream(call.peer, remoteStream);
-        });
-        peerCalls[call.peer] = call;
-      });
-    }
-
-    // Call all existing peers in room
-    connectVoiceToRoomPeers();
-    updateVoiceBarUI();
-    render();
-  } catch (err) {
-    console.error("Microphone access denied or error:", err);
-    alert(lang === 'ar' ? "لم نتمكن من الوصول للمايكروفون. يرجى السماح بالصلاحيات." : "Could not access microphone. Please allow mic permissions.");
-  }
-}
-
-function connectVoiceToRoomPeers() {
-  if (!room || !room.players || !localAudioStream || !peer) return;
-  room.players.forEach(p => {
-    if (p.peerId && p.peerId !== me.peerId && !peerCalls[p.peerId]) {
-      const call = peer.call(p.peerId, localAudioStream);
-      if (call) {
-        call.on('stream', (remoteStream) => {
-          handleRemoteStream(p.peerId, remoteStream);
-        });
-        peerCalls[p.peerId] = call;
-      }
-    }
-  });
-}
-
-function handleRemoteStream(peerId, remoteStream) {
-  if (!remoteAudioElements[peerId]) {
-    const audio = document.createElement('audio');
-    audio.autoplay = true;
-    audio.srcObject = remoteStream;
-    audio.muted = isDeafened;
-    document.body.appendChild(audio);
-    remoteAudioElements[peerId] = audio;
-
-    // Find player ID associated with this peer ID
-    const targetPlayer = room ? room.players.find(p => p.peerId === peerId) : null;
-    const targetId = targetPlayer ? targetPlayer.id : peerId;
-    setupAudioAnalysis(remoteStream, targetId);
-  }
-}
-
-function toggleMic() {
-  if (!localAudioStream) return;
-  isMicMuted = !isMicMuted;
-  localAudioStream.getAudioTracks().forEach(track => { track.enabled = !isMicMuted; });
-  if (isMicMuted) speakingMap[me.id] = false;
-  updateVoiceBarUI();
-  render();
-}
-
-function toggleDeafen() {
-  isDeafened = !isDeafened;
-  Object.values(remoteAudioElements).forEach(audio => { audio.muted = isDeafened; });
-  updateVoiceBarUI();
-}
-
-function stopVoiceChat() {
-  if (localAudioStream) {
-    localAudioStream.getTracks().forEach(track => track.stop());
-    localAudioStream = null;
-  }
-  Object.values(peerCalls).forEach(call => call.close());
-  peerCalls = {};
-  Object.values(remoteAudioElements).forEach(audio => audio.remove());
-  remoteAudioElements = {};
-  isVoiceConnected = false;
-  speakingMap = {};
-  updateVoiceBarUI();
 }
 
 function setupAudioAnalysis(stream, playerId) {
@@ -560,8 +452,12 @@ function setupAudioAnalysis(stream, playerId) {
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
-    const checkVolume = () => {
-      if (!isVoiceConnected) return;
+    // Optimized: check volume at 100ms intervals instead of 60fps requestAnimationFrame to reduce CPU load & audio lag
+    const intervalId = setInterval(() => {
+      if (!isVoiceConnected) {
+        clearInterval(intervalId);
+        return;
+      }
       analyser.getByteFrequencyData(dataArray);
       let sum = 0;
       for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
@@ -572,119 +468,35 @@ function setupAudioAnalysis(stream, playerId) {
         speakingMap[playerId] = isSpeakingNow;
         updateSpeakingUI(playerId, isSpeakingNow);
       }
-      requestAnimationFrame(checkVolume);
-    };
-    checkVolume();
+    }, 120);
   } catch (e) {
     console.error("Audio analysis setup failed", e);
   }
 }
 
-function updateSpeakingUI(playerId, isSpeaking) {
-  const card = document.querySelector(`.pcard[data-id="${playerId}"]`);
-  if (card) {
-    card.classList.toggle('speaking', isSpeaking);
-    let wave = card.querySelector('.speaking-wave');
-    if (isSpeaking && !wave) {
-      wave = document.createElement('div');
-      wave.className = 'speaking-wave';
-      wave.innerHTML = '🔊';
-      card.appendChild(wave);
-    } else if (!isSpeaking && wave) {
-      wave.remove();
-    }
-  }
-}
-
-function updateVoiceBarUI() {
+function renderAvatarSelector() {
   const s = t();
-  const ind = document.getElementById('vIndicator');
-  const txt = document.getElementById('vStatusText');
-  const btns = document.getElementById('vBtns');
-
-  if (!isVoiceConnected) {
-    ind.className = 'v-indicator';
-    txt.textContent = s.voiceOff;
-    btns.innerHTML = `<button class="v-btn primary" id="btnJoinVoice">${s.joinVoice}</button>`;
-    document.getElementById('btnJoinVoice').onclick = startVoiceChat;
-  } else {
-    ind.className = `v-indicator ${isMicMuted ? 'muted' : 'active'}`;
-    txt.textContent = isMicMuted ? s.muteMic : s.voiceConn;
-    btns.innerHTML = `
-      <button class="v-btn ${isMicMuted ? 'danger' : ''}" id="btnMute">${isMicMuted ? s.unmuteMic : s.muteMic}</button>
-      <button class="v-btn ${isDeafened ? 'danger' : ''}" id="btnDeafen">${isDeafened ? s.undeafen : s.deafen}</button>
-      <button class="v-btn ghost" id="btnLeaveVoice">✕</button>
-    `;
-    document.getElementById('btnMute').onclick = toggleMic;
-    document.getElementById('btnDeafen').onclick = toggleDeafen;
-    document.getElementById('btnLeaveVoice').onclick = stopVoiceChat;
-  }
-}
-
-function assignRoles(playerIds){
-  const n = playerIds.length;
-  const wolves = n>=10?3:(n>=6?2:1);
-  const hasHunter = n>=8;
-  const pool = [];
-  for(let i=0;i<wolves;i++) pool.push('werewolf');
-  pool.push('seer','doctor');
-  if(hasHunter) pool.push('hunter');
-  while(pool.length < n) pool.push('villager');
-  pool.length = n;
-  for(let i=pool.length-1;i>0;i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [pool[i],pool[j]] = [pool[j],pool[i]];
-  }
-  const roles = {};
-  playerIds.forEach((id,i)=> roles[id]=pool[i]);
-  return roles;
-}
-
-function aliveIds(r){ return r.players.map(p=>p.id).filter(id=>r.alive[id]); }
-function aliveWolves(r){ return aliveIds(r).filter(id=>r.roles[id]==='werewolf'); }
-function playerName(r,id){ const p=r.players.find(p=>p.id===id); return p?p.name:'?'; }
-function roleName(r,id){ return t().roles[r.roles[id]].name; }
-
-function render(){
-  if(!roomCode){
-    if(screen==='hostSetup') return renderHostSetup();
-    if(screen==='joinSetup') return renderJoinSetup();
-    return renderLanding();
-  }
-  if(!room) return renderLoading();
-  switch(room.phase){
-    case 'lobby': return renderLobby();
-    case 'reveal': return renderReveal();
-    case 'night': return renderNight();
-    case 'night_hunter_revenge': return renderHunterRevenge();
-    case 'day_reveal': return renderDayReveal();
-    case 'voting': return renderVoting();
-    case 'day_hunter_revenge': return renderHunterRevenge();
-    case 'ended': return renderEnded();
-    default: return renderLoading();
-  }
-}
-
-function renderLoading(){
-  content.innerHTML = `<div class="sub pulse center">…</div>`;
-}
-
-function renderLanding(){
-  resetPeer(); roomCode=''; room=null;
-  const s=t();
-  content.innerHTML = `
-    <div class="eyebrow">${s.eyebrow}</div>
-    <h1>${s.title1} <span>${s.title1accent}</span></h1>
-    <div class="sub">${s.subLanding}</div>
-    <div class="card">
-      <div class="choice-grid">
-        <div class="choice" id="hostBtn"><b>${s.hostTitle}</b>${s.hostDesc}</div>
-        <div class="choice" id="joinBtn"><b>${s.joinTitle}</b>${s.joinDesc}</div>
-      </div>
+  return `
+    <label>${s.chooseAvatar}</label>
+    <div style="display:flex; gap:8px; overflow-x:auto; padding:6px 0 10px;">
+      ${AVATARS.map(av => `
+        <button type="button" class="avatar-btn ${draft.avatar === av ? 'active' : ''}" data-av="${av}" style="width:42px; height:42px; padding:0; font-size:22px; flex-shrink:0; background:${draft.avatar === av ? 'var(--moon)' : 'var(--paper2)'}; border:1px solid ${draft.avatar === av ? 'var(--moon)' : 'var(--line)'}; border-radius:8px;">
+          ${av}
+        </button>
+      `).join('')}
     </div>
   `;
-  document.getElementById('hostBtn').onclick=()=>{ screen='hostSetup'; render(); };
-  document.getElementById('joinBtn').onclick=()=>{ screen='joinSetup'; render(); };
+}
+
+function bindAvatarEvents() {
+  document.querySelectorAll('.avatar-btn').forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      draft.avatar = btn.dataset.av;
+      me.avatar = draft.avatar;
+      render();
+    };
+  });
 }
 
 function renderHostSetup(){
@@ -696,19 +508,21 @@ function renderHostSetup(){
     <div class="card">
       <label>${s.yourName}</label>
       <input id="hostName" placeholder="${s.namePH}" maxlength="20" value="${draft.hostName}">
+      ${renderAvatarSelector()}
       <button id="createBtn">${s.createRoom}</button>
       <div class="err" id="err"></div>
     </div>
     <div class="back" id="backBtn">${lang==='ar'?'→ ':'← '}${s.back}</div>
   `;
   document.getElementById('hostName').oninput=(e)=>{ draft.hostName=e.target.value; };
+  bindAvatarEvents();
   document.getElementById('backBtn').onclick=()=>{ screen='landing'; render(); };
   document.getElementById('createBtn').onclick = ()=>{
     const name = document.getElementById('hostName').value.trim();
     if(!name){ showErr('err', s.enterNameFirst); return; }
     document.getElementById('createBtn').disabled = true;
 
-    me.name = name; me.isHost = true;
+    me.name = name; me.avatar = draft.avatar; me.isHost = true;
     roomCode = randCode();
 
     peer = new Peer(PEER_PREFIX + roomCode);
@@ -717,7 +531,7 @@ function renderHostSetup(){
       me.peerId = id;
       room = {
         code: roomCode, phase:'lobby', round:0,
-        players:[{id:me.id, name:me.name, peerId:me.peerId}],
+        players:[{id:me.id, name:me.name, avatar:me.avatar, peerId:me.peerId}],
         roles:{}, alive:{},
         night:{wolfVotes:{}, doctorTarget:{}, seerTarget:{}},
         votes:{}, log:[{type:'created'}], chat:[],
@@ -739,7 +553,7 @@ function renderHostSetup(){
             conn.send({type:'ERR', msg: t().nameTaken});
             return;
           }
-          room.players.push({id: data.id, name: data.name, peerId: data.peerId});
+          room.players.push({id: data.id, name: data.name, avatar: data.avatar || AVATARS[0], peerId: data.peerId});
           conn.send({type:'JOIN_ACK', room});
           broadcastState();
           connectVoiceToRoomPeers();
@@ -758,39 +572,6 @@ function renderHostSetup(){
   };
 }
 
-function handleClientAction(data) {
-  if (data.action === 'NIGHT_SUBMIT') {
-    const { myRole, playerId, targetId } = data;
-    if(myRole==='werewolf') room.night.wolfVotes[playerId]=targetId;
-    if(myRole==='seer') room.night.seerTarget[playerId]=targetId;
-    if(myRole==='doctor') room.night.doctorTarget[playerId]=targetId;
-    broadcastState();
-  } else if (data.action === 'HUNTER_SHOT') {
-    const shooter = room.hunterPending;
-    const targetId = data.targetId;
-    room.alive[targetId] = false;
-    room.log.push({type:'hunter_shot', a: shooter, b: targetId});
-    room.hunterPending = null;
-    const cameFromDay = room._returnPhase === 'day';
-    room._returnPhase = null;
-    const win = checkWin(room);
-    if(win){
-      room.winner=win; room.phase='ended'; room.log.push({type: win==='villagers'?'win_villagers':'win_wolves'});
-    } else if(cameFromDay){
-      room.round += 1;
-      room.phase = 'night';
-      room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
-      room.log.push({type:'night_begin', round:room.round});
-    } else {
-      room.phase = 'day_reveal';
-    }
-    broadcastState();
-  } else if (data.action === 'VOTE_SUBMIT') {
-    room.votes[data.playerId] = data.targetId;
-    broadcastState();
-  }
-}
-
 function renderJoinSetup(){
   const s=t();
   content.innerHTML = `
@@ -802,6 +583,7 @@ function renderJoinSetup(){
       <input id="codeIn" placeholder="ABCD" maxlength="4" style="text-transform:uppercase; letter-spacing:0.3em; text-align:center; font-size:22px; direction:ltr;" value="${draft.joinCode}">
       <label>${s.yourName}</label>
       <input id="nameIn" placeholder="${s.namePH}" maxlength="20" value="${draft.joinName}">
+      ${renderAvatarSelector()}
       <button id="joinBtn2">${s.joinRoomBtn}</button>
       <div class="err" id="err"></div>
     </div>
@@ -809,6 +591,7 @@ function renderJoinSetup(){
   `;
   document.getElementById('codeIn').oninput=(e)=>{ draft.joinCode=e.target.value; };
   document.getElementById('nameIn').oninput=(e)=>{ draft.joinName=e.target.value; };
+  bindAvatarEvents();
   document.getElementById('backBtn').onclick=()=>{ screen='landing'; render(); };
   document.getElementById('joinBtn2').onclick = ()=>{
     const code = document.getElementById('codeIn').value.trim().toUpperCase();
@@ -817,7 +600,7 @@ function renderJoinSetup(){
     if(!name){ showErr('err', s.enterName); return; }
     document.getElementById('joinBtn2').disabled = true;
 
-    me.name = name; me.isHost = false;
+    me.name = name; me.avatar = draft.avatar; me.isHost = false;
     roomCode = code;
 
     peer = new Peer();
@@ -826,7 +609,7 @@ function renderJoinSetup(){
       hostConn = peer.connect(PEER_PREFIX + roomCode);
 
       hostConn.on('open', ()=>{
-        hostConn.send({ type: 'JOIN', id: me.id, name: me.name, peerId: me.peerId });
+        hostConn.send({ type: 'JOIN', id: me.id, name: me.name, avatar: me.avatar, peerId: me.peerId });
       });
 
       hostConn.on('data', (data)=>{
@@ -839,7 +622,9 @@ function renderJoinSetup(){
           render();
         } else if(data.type === 'CHAT') {
           if(!room.chat) room.chat = [];
-          room.chat.push(data.message);
+          if(!room.chat.some(m => m.id === data.message.id)) {
+            room.chat.push(data.message);
+          }
           if (activeTab !== 'chat') unreadChatCount++;
           render();
         }
@@ -858,126 +643,6 @@ function renderJoinSetup(){
   };
 }
 
-function renderLobby(){
-  const s=t();
-  const isHost = me.isHost;
-  content.innerHTML = `
-    <div class="eyebrow">${s.waitingRoom}</div>
-    <h1>${s.room} <span>${room.code}</span></h1>
-    <div class="sub">${isHost ? s.codeHintShare : s.waitingOthers}</div>
-    <div class="card">
-      <div class="code-display">${room.code}</div>
-      <label>${s.playersJoined} <span style="opacity:.6">(${room.players.length})</span></label>
-      <ul class="plist" id="plist"></ul>
-      ${isHost ? `<button id="startBtn">${s.startGame}</button><div class="err" id="err"></div>` : ''}
-    </div>
-    <div class="back" id="backBtn">${isHost ? s.cancelRoom : s.leaveRoom}</div>
-  `;
-  const ul = document.getElementById('plist');
-  ul.innerHTML = room.players.map(p=>`<li><span><span class="dot"></span>${p.name}${p.id===me.id?' '+s.you:''}</span></li>`).join('') || `<div class="empty">${s.none}</div>`;
-  document.getElementById('backBtn').onclick=()=>{ screen='landing'; render(); };
-  if(isHost){
-    const startBtn = document.getElementById('startBtn');
-    startBtn.disabled = room.players.length < 4;
-    startBtn.onclick = ()=>{
-      if(room.players.length < 4){ showErr('err', s.needFour); return; }
-      const ids = room.players.map(p=>p.id);
-      room.roles = assignRoles(ids);
-      const alive = {}; ids.forEach(id=>alive[id]=true);
-      room.alive = alive;
-      room.phase = 'reveal';
-      room.round = 1;
-      room.log = [{type:'game_start'}];
-      room.chat = [];
-      room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
-      room.votes = {};
-      room.hunterPending = null;
-      room.winner = null;
-      room.revealDeadline = Date.now() + 25000;
-      broadcastState();
-    };
-  }
-}
-
-let transitioning = false;
-let revealTicker = null;
-function ensureRevealTicker(){
-  if(revealTicker) return;
-  revealTicker = setInterval(()=>{
-    if(room && room.phase==='reveal'){
-      render();
-    } else {
-      clearInterval(revealTicker); revealTicker=null;
-    }
-  }, 1000);
-}
-function beginNightFromReveal(){
-  if(transitioning || !me.isHost) return;
-  transitioning = true;
-  room.phase = 'night';
-  room.log.push({type:'night_begin', round:room.round});
-  transitioning = false;
-  selection = null;
-  broadcastState();
-}
-
-function renderReveal(){
-  const s=t();
-  ensureRevealTicker();
-  const myRole = room.roles[me.id];
-  const rd = s.roles[myRole];
-  const isHost = me.isHost;
-  const remainingMs = (room.revealDeadline || 0) - Date.now();
-  const remaining = Math.max(0, Math.ceil(remainingMs/1000));
-
-  if(isHost && remaining<=0 && !transitioning){
-    beginNightFromReveal();
-    return;
-  }
-
-  content.innerHTML = `
-    <div class="eyebrow">${s.nightEyebrow(room.round)}</div>
-    <h1>${s.revealTitle} <span>${s.revealAccent}</span></h1>
-    <div class="sub">${s.subReveal}</div>
-    <div class="card">
-      <div class="flipzone">
-        <div class="flipcard ${flipState.flipped?'flipped':''}" id="flipcard">
-          <div class="flipinner">
-            <div class="face front">
-              <div class="moonicon">🌙</div>
-              <div class="tapline">${s.tapReveal}</div>
-            </div>
-            <div class="face back">
-              <div class="roleicon">${ROLE_ICON[myRole]}</div>
-              <div class="rolename">${rd.name}</div>
-              <div class="roledesc">${rd.desc}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="progress">${s.autoStartIn(remaining)}</div>
-      ${isHost ? `<button class="ghost small" id="beginBtn">${s.beginNight}</button>` : ''}
-    </div>
-  `;
-  document.getElementById('flipcard').onclick = ()=>{
-    if(flipState.flipped) return;
-    flipState.flipped = true;
-    render();
-  };
-  if(isHost){
-    const bb = document.getElementById('beginBtn');
-    if(bb) bb.onclick = ()=> beginNightFromReveal();
-  }
-}
-
-function renderRoleBadge(){
-  const s=t();
-  const myRole = room.roles[me.id];
-  if(!myRole) return '';
-  const alive = room.alive[me.id];
-  return `<div class="center" style="margin-bottom:12px;"><span class="roletag">${ROLE_ICON[myRole]} ${s.yourRoleLabel}: ${s.roles[myRole].name}${alive?'':' 💀'}</span></div>`;
-}
-
 function renderCardsGrid(playerList, opts){
   const s=t();
   const html = playerList.map(p=>{
@@ -986,7 +651,7 @@ function renderCardsGrid(playerList, opts){
     const disabled = (opts.disabledIds||[]).includes(p.id) || (isDead && !opts.deadSelectable);
     const isSpeaking = !!speakingMap[p.id];
     return `<div class="pcard ${isDead?'dead':''} ${isSelected?'selected':''} ${disabled?'disabled':''} ${isSpeaking?'speaking':''}" data-id="${p.id}">
-      <div class="av">${avatarFor(p.id)}</div>
+      <div class="av">${avatarFor(p)}</div>
       <div class="nm">${p.name}${p.id===me.id?' '+s.you:''}</div>
       ${isSpeaking ? `<div class="speaking-wave">🔊</div>` : ''}
       ${isDead && opts.showSkull!==false ? `<div class="skull">💀</div>` : ''}
@@ -1073,50 +738,186 @@ function renderNight(){
       selection = null;
       broadcastState();
     } else {
+      // Optimistic local state update so the client sees locked status instantly
+      if(myRole==='werewolf') room.night.wolfVotes[me.id]=targetId;
+      if(myRole==='seer') room.night.seerTarget[me.id]=targetId;
+      if(myRole==='doctor') room.night.doctorTarget[me.id]=targetId;
       sendToHost({ action: 'NIGHT_SUBMIT', myRole, playerId: me.id, targetId });
       selection = null;
+      render();
     }
   };
   const rb = document.getElementById('resolveBtn');
   if(rb) rb.onclick = ()=> resolveNight();
 }
 
-function resolveNight(){
-  if (!me.isHost) return;
-  const tally = {};
-  Object.values(room.night.wolfVotes).forEach(id=>{ tally[id]=(tally[id]||0)+1; });
-  let victim=null, max=0;
-  Object.entries(tally).forEach(([id,c])=>{ if(c>max){max=c; victim=id;} });
-  const protectedIds = new Set(Object.values(room.night.doctorTarget));
-  let died = null;
-  if(victim && !protectedIds.has(victim)){
-    room.alive[victim] = false;
-    died = victim;
-  }
-  if(died){
-    room.log.push({type:'deaths', ids:[died]});
+function renderLogAndChatPanel(){
+  const s=t();
+  const unreadBadge = unreadChatCount > 0 ? `<span class="badge">${unreadChatCount}</span>` : '';
+  
+  let chatContent = '';
+  if (activeTab === 'log') {
+    const items = (room.log||[]).map(ev=>{
+      let cls=''; let txt='';
+      switch(ev.type){
+        case 'game_start': txt=s.log_game_start; break;
+        case 'night_begin': txt=s.log_night_begin(ev.round); break;
+        case 'peaceful': txt=s.log_peaceful; cls='safe'; break;
+        case 'deaths': txt=s.log_deaths(ev.ids.map(id=>playerName(room,id)).join(', ')); cls='death'; break;
+        case 'hunter_shot': txt=s.log_hunter_shot(playerName(room,ev.a), playerName(room,ev.b)); cls='death'; break;
+        case 'vote_tie': txt=s.log_vote_tie; break;
+        case 'vote_result': txt=s.log_vote_result(playerName(room,ev.id), roleName(room,ev.id)); cls='death'; break;
+        case 'win_villagers': txt=s.log_win_villagers; cls='win'; break;
+        case 'win_wolves': txt=s.log_win_wolves; cls='win'; break;
+        default: txt='';
+      }
+      return txt ? `<div class="entry ${cls}">${txt}</div>` : '';
+    }).join('');
+    chatContent = `<div class="log" id="logContainer" style="cursor:pointer;">${items}</div>`;
   } else {
-    room.log.push({type:'peaceful'});
+    // Chat Tab
+    const myRole = room.roles[me.id];
+    const isWolf = myRole === 'werewolf';
+    
+    const visibleMessages = (room.chat || []).filter(m => {
+      if (m.isWolfOnly) return isWolf;
+      return true;
+    });
+
+    const msgsHtml = visibleMessages.map(m => {
+      const isMine = m.senderId === me.id;
+      return `
+        <div class="chat-msg ${isMine ? 'mine' : ''} ${m.isWolfOnly ? 'wolf' : ''}">
+          <div class="chat-sender">${m.senderName} ${m.isWolfOnly ? '(🐺 Wolf Chat)' : ''}</div>
+          <div class="chat-text">${escapeHtml(m.text)}</div>
+        </div>
+      `;
+    }).join('');
+
+    chatContent = `
+      <div class="chat-panel">
+        <div class="chat-messages" id="chatMsgs" style="cursor:pointer;" title="Tap to focus input">${msgsHtml}</div>
+        <div class="chat-input-box">
+          <input id="chatInput" placeholder="${s.typeMsgPH}" maxlength="150">
+          <button id="sendChatBtn">${s.sendMsg}</button>
+        </div>
+      </div>
+    `;
   }
-  if(died && room.roles[died]==='hunter'){
-    room.hunterPending = died;
-    room._returnPhase = 'night';
-    room.phase = 'night_hunter_revenge';
-  } else {
-    room.phase = 'day_reveal';
-  }
-  const win = checkWin(room);
-  if(win){ room.winner = win; room.phase='ended'; room.log.push({type: win==='villagers'?'win_villagers':'win_wolves'}); }
-  selection = null;
-  broadcastState();
+
+  return `
+    <div class="card" style="margin-top:10px;">
+      <div class="tab-bar">
+        <div class="tab-item ${activeTab==='log'?'active':''}" id="tabLog">${s.logTab}</div>
+        <div class="tab-item ${activeTab==='chat'?'active':''}" id="tabChat">${s.chatTab} ${unreadBadge}</div>
+      </div>
+      ${chatContent}
+    </div>
+  `;
 }
 
-function checkWin(r){
-  const wolves = aliveIds(r).filter(id=>r.roles[id]==='werewolf').length;
-  const others = aliveIds(r).length - wolves;
-  if(wolves===0) return 'villagers';
-  if(wolves>=others) return 'wolves';
-  return null;
+function bindLogChatEvents() {
+  const tabLog = document.getElementById('tabLog');
+  const tabChat = document.getElementById('tabChat');
+  if (tabLog) tabLog.onclick = () => { activeTab = 'log'; render(); };
+  if (tabChat) tabChat.onclick = () => { activeTab = 'chat'; unreadChatCount = 0; render(); };
+
+  const sendBtn = document.getElementById('sendChatBtn');
+  const chatInput = document.getElementById('chatInput');
+  const chatMsgs = document.getElementById('chatMsgs');
+
+  // Tap chat area to focus input and bring into view
+  if (chatMsgs && chatInput) {
+    chatMsgs.onclick = () => {
+      chatInput.focus();
+      chatInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+  }
+
+  if (sendBtn && chatInput) {
+    const doSend = () => {
+      const txt = chatInput.value.trim();
+      if (!txt) return;
+      const myRole = room.roles[me.id];
+      const isWolfOnly = room.phase === 'night' && myRole === 'werewolf';
+
+      const msg = {
+        id: 'm_' + Math.random().toString(36).slice(2, 8),
+        senderId: me.id,
+        senderName: me.name,
+        text: txt,
+        isWolfOnly
+      };
+
+      if (!room.chat) room.chat = [];
+      room.chat.push(msg);
+
+      if (me.isHost) {
+        broadcastChatMsg(msg);
+      } else {
+        sendToHost({ type: 'CHAT', message: msg });
+        render();
+      }
+      chatInput.value = '';
+    };
+
+    sendBtn.onclick = doSend;
+    chatInput.onkeydown = (e) => { if (e.key === 'Enter') doSend(); };
+    
+    // Auto-scroll to bottom of chat
+    const msgsEl = document.getElementById('chatMsgs');
+    if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  const logEl = document.getElementById('logContainer');
+  if (logEl) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function renderVoting(){
+  const s=t();
+  const isHost = me.isHost;
+  const amAlive = room.alive[me.id];
+  const targets = room.players.filter(p=>room.alive[p.id]);
+  const myVote = room.votes[me.id];
+  content.innerHTML = `
+    <div class="eyebrow">${s.dayEyebrow(room.round)}</div>
+    <h1>${s.votingTitle} <span>${s.votingAccent}</span></h1>
+    <div class="sub">${s.subVoting}</div>
+    ${renderRoleBadge()}
+    <div class="card">
+      ${amAlive ? `
+        ${renderCardsGrid(targets, {selectedId: selection || myVote, disabledIds: myVote?targets.map(p=>p.id):[me.id]})}
+        <button id="voteSubmit" ${myVote?'disabled':''}>${myVote? s.voteLocked : s.voteFor}</button>
+      ` : `<div class="sub center">${s.waitingVote}</div>${renderCardsGrid(targets, {selectedId:null, disabledIds: targets.map(p=>p.id)})}`}
+      <div class="progress">${s.voteProgress(Object.keys(room.votes).length, aliveIds(room).length)}</div>
+      ${isHost ? `<button class="ghost small" id="resolveVoteBtn">${s.resolveVote}</button>` : ''}
+    </div>
+    ${renderLogAndChatPanel()}
+  `;
+  bindLogChatEvents();
+  if(amAlive && !myVote){
+    document.querySelectorAll('.pcard').forEach(el=>{
+      if(el.classList.contains('disabled')) return;
+      el.onclick=()=>{ selection=el.dataset.id; render(); };
+    });
+    const vb = document.getElementById('voteSubmit');
+    if(vb) vb.onclick = ()=>{
+      if(!selection) return;
+      if (isHost) {
+        room.votes[me.id] = selection;
+        selection = null;
+        broadcastState();
+      } else {
+        room.votes[me.id] = selection;
+        sendToHost({ action: 'VOTE_SUBMIT', playerId: me.id, targetId: selection });
+        selection = null;
+        render();
+      }
+    };
+  }
+  if(isHost){
+    document.getElementById('resolveVoteBtn').onclick = ()=> resolveVote();
+  }
 }
 
 function renderHunterRevenge(){
@@ -1170,226 +971,10 @@ function renderHunterRevenge(){
       } else {
         sendToHost({ action: 'HUNTER_SHOT', targetId: selection });
         selection = null;
+        render();
       }
     };
   }
-}
-
-function renderLogAndChatPanel(){
-  const s=t();
-  const unreadBadge = unreadChatCount > 0 ? `<span class="badge">${unreadChatCount}</span>` : '';
-  
-  let chatContent = '';
-  if (activeTab === 'log') {
-    const items = (room.log||[]).map(ev=>{
-      let cls=''; let txt='';
-      switch(ev.type){
-        case 'game_start': txt=s.log_game_start; break;
-        case 'night_begin': txt=s.log_night_begin(ev.round); break;
-        case 'peaceful': txt=s.log_peaceful; cls='safe'; break;
-        case 'deaths': txt=s.log_deaths(ev.ids.map(id=>playerName(room,id)).join(', ')); cls='death'; break;
-        case 'hunter_shot': txt=s.log_hunter_shot(playerName(room,ev.a), playerName(room,ev.b)); cls='death'; break;
-        case 'vote_tie': txt=s.log_vote_tie; break;
-        case 'vote_result': txt=s.log_vote_result(playerName(room,ev.id), roleName(room,ev.id)); cls='death'; break;
-        case 'win_villagers': txt=s.log_win_villagers; cls='win'; break;
-        case 'win_wolves': txt=s.log_win_wolves; cls='win'; break;
-        default: txt='';
-      }
-      return txt ? `<div class="entry ${cls}">${txt}</div>` : '';
-    }).join('');
-    chatContent = `<div class="log" id="logContainer">${items}</div>`;
-  } else {
-    // Chat Tab
-    const myRole = room.roles[me.id];
-    const isWolf = myRole === 'werewolf';
-    const isNight = room.phase === 'night';
-    
-    const visibleMessages = (room.chat || []).filter(m => {
-      if (m.isWolfOnly) return isWolf;
-      return true;
-    });
-
-    const msgsHtml = visibleMessages.map(m => {
-      const isMine = m.senderId === me.id;
-      return `
-        <div class="chat-msg ${isMine ? 'mine' : ''} ${m.isWolfOnly ? 'wolf' : ''}">
-          <div class="chat-sender">${m.senderName} ${m.isWolfOnly ? '(🐺 Wolf Chat)' : ''}</div>
-          <div class="chat-text">${escapeHtml(m.text)}</div>
-        </div>
-      `;
-    }).join('');
-
-    chatContent = `
-      <div class="chat-panel">
-        <div class="chat-messages" id="chatMsgs">${msgsHtml}</div>
-        <div class="chat-input-box">
-          <input id="chatInput" placeholder="${s.typeMsgPH}" maxlength="150">
-          <button id="sendChatBtn">${s.sendMsg}</button>
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="card" style="margin-top:10px;">
-      <div class="tab-bar">
-        <div class="tab-item ${activeTab==='log'?'active':''}" id="tabLog">${s.logTab}</div>
-        <div class="tab-item ${activeTab==='chat'?'active':''}" id="tabChat">${s.chatTab} ${unreadBadge}</div>
-      </div>
-      ${chatContent}
-    </div>
-  `;
-}
-
-function escapeHtml(str) {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function bindLogChatEvents() {
-  const tabLog = document.getElementById('tabLog');
-  const tabChat = document.getElementById('tabChat');
-  if (tabLog) tabLog.onclick = () => { activeTab = 'log'; render(); };
-  if (tabChat) tabChat.onclick = () => { activeTab = 'chat'; unreadChatCount = 0; render(); };
-
-  const sendBtn = document.getElementById('sendChatBtn');
-  const chatInput = document.getElementById('chatInput');
-  if (sendBtn && chatInput) {
-    const doSend = () => {
-      const txt = chatInput.value.trim();
-      if (!txt) return;
-      const myRole = room.roles[me.id];
-      const isWolfOnly = room.phase === 'night' && myRole === 'werewolf';
-
-      const msg = {
-        id: 'm_' + Math.random().toString(36).slice(2, 8),
-        senderId: me.id,
-        senderName: me.name,
-        text: txt,
-        isWolfOnly
-      };
-
-      if (me.isHost) {
-        broadcastChatMsg(msg);
-      } else {
-        sendToHost({ type: 'CHAT', message: msg });
-      }
-      chatInput.value = '';
-    };
-
-    sendBtn.onclick = doSend;
-    chatInput.onkeydown = (e) => { if (e.key === 'Enter') doSend(); };
-    
-    // Auto-scroll to bottom of chat
-    const msgsEl = document.getElementById('chatMsgs');
-    if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
-  }
-
-  const logEl = document.getElementById('logContainer');
-  if (logEl) logEl.scrollTop = logEl.scrollHeight;
-}
-
-function renderDayReveal(){
-  const s=t();
-  const isHost = me.isHost;
-  content.innerHTML = `
-    <div class="eyebrow">${s.dayEyebrow(room.round)}</div>
-    <h1>${s.dayTitle} <span>${s.dayAccent}</span></h1>
-    ${renderRoleBadge()}
-    <div class="card">
-      ${isHost ? `<button id="voteBtn">${s.continueToVote}</button>` : `<div class="sub center" style="margin-top:14px;">${s.waitingVote}</div>`}
-    </div>
-    ${renderLogAndChatPanel()}
-  `;
-  bindLogChatEvents();
-  if(isHost){
-    document.getElementById('voteBtn').onclick = ()=>{
-      room.phase = 'voting';
-      room.votes = {};
-      broadcastState();
-    };
-  }
-}
-
-function renderVoting(){
-  const s=t();
-  const isHost = me.isHost;
-  const amAlive = room.alive[me.id];
-  const targets = room.players.filter(p=>room.alive[p.id]);
-  const myVote = room.votes[me.id];
-  content.innerHTML = `
-    <div class="eyebrow">${s.dayEyebrow(room.round)}</div>
-    <h1>${s.votingTitle} <span>${s.votingAccent}</span></h1>
-    <div class="sub">${s.subVoting}</div>
-    ${renderRoleBadge()}
-    <div class="card">
-      ${amAlive ? `
-        ${renderCardsGrid(targets, {selectedId: selection || myVote, disabledIds: myVote?targets.map(p=>p.id):[me.id]})}
-        <button id="voteSubmit" ${myVote?'disabled':''}>${myVote? s.voteLocked : s.voteFor}</button>
-      ` : `<div class="sub center">${s.waitingVote}</div>${renderCardsGrid(targets, {selectedId:null, disabledIds: targets.map(p=>p.id)})}`}
-      <div class="progress">${s.voteProgress(Object.keys(room.votes).length, aliveIds(room).length)}</div>
-      ${isHost ? `<button class="ghost small" id="resolveVoteBtn">${s.resolveVote}</button>` : ''}
-    </div>
-    ${renderLogAndChatPanel()}
-  `;
-  bindLogChatEvents();
-  if(amAlive && !myVote){
-    document.querySelectorAll('.pcard').forEach(el=>{
-      if(el.classList.contains('disabled')) return;
-      el.onclick=()=>{ selection=el.dataset.id; render(); };
-    });
-    const vb = document.getElementById('voteSubmit');
-    if(vb) vb.onclick = ()=>{
-      if(!selection) return;
-      if (isHost) {
-        room.votes[me.id] = selection;
-        selection = null;
-        broadcastState();
-      } else {
-        sendToHost({ action: 'VOTE_SUBMIT', playerId: me.id, targetId: selection });
-        selection = null;
-      }
-    };
-  }
-  if(isHost){
-    document.getElementById('resolveVoteBtn').onclick = ()=> resolveVote();
-  }
-}
-
-function resolveVote(){
-  if (!me.isHost) return;
-  const tally = {};
-  Object.values(room.votes).forEach(id=>{ tally[id]=(tally[id]||0)+1; });
-  let top=null, max=0, tie=false;
-  Object.entries(tally).forEach(([id,c])=>{
-    if(c>max){max=c; top=id; tie=false;}
-    else if(c===max){tie=true;}
-  });
-  if(top && !tie){
-    room.alive[top] = false;
-    room.log.push({type:'vote_result', id:top});
-    if(room.roles[top]==='hunter'){
-      room.hunterPending = top;
-      room._returnPhase = 'day';
-      room.phase = 'day_hunter_revenge';
-      broadcastState();
-      return;
-    }
-  } else {
-    room.log.push({type:'vote_tie'});
-  }
-  const win = checkWin(room);
-  if(win){
-    room.winner = win;
-    room.phase = 'ended';
-    room.log.push({type: win==='villagers'?'win_villagers':'win_wolves'});
-  } else {
-    room.round += 1;
-    room.phase = 'night';
-    room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
-    room.log.push({type:'night_begin', round:room.round});
-  }
-  selection = null;
-  broadcastState();
 }
 
 function renderEnded(){
@@ -1407,7 +992,7 @@ function renderEnded(){
     <div class="card" style="margin-top:16px;">
       <label>${s.finalRoles}</label>
       <ul class="plist">${rolesList}</ul>
-      ${isHost ? `<button id="againBtn">${s.playAgain}</button>` : ''}
+      ${isHost ? `<button id="againBtn">${s.playAgain}</button>` : `<div class="sub center" style="margin-top:14px;">${s.waitingHostNextGame}</div>`}
     </div>
     ${renderLogAndChatPanel()}
     <div class="back" id="exitBtn">${s.exitGame}</div>
@@ -1420,10 +1005,498 @@ function renderEnded(){
       room.roles = {};
       room.alive = {};
       room.round = 0;
+      room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
+      room.votes = {};
+      room.hunterPending = null;
+      room.winner = null;
+      room.log = [{type:'created'}];
       broadcastState();
     };
   }
 }
+
+const ROLE_ICON = {
+  werewolf: '🐺',
+  seer: '👁️',
+  doctor: '🩺',
+  hunter: '🏹',
+  villager: '🌾'
+};
+
+function t() {
+  return T[lang] || T.en;
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  if (el) el.innerText = msg || '';
+}
+
+function randCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let res = '';
+  for (let i = 0; i < 4; i++) res += chars.charAt(Math.floor(Math.random() * chars.length));
+  return res;
+}
+
+function playerName(room, id) {
+  const p = room && room.players ? room.players.find(x => x.id === id) : null;
+  return p ? p.name : 'Unknown';
+}
+
+function roleName(room, id) {
+  const r = room && room.roles ? room.roles[id] : null;
+  const s = t();
+  return r && s.roles && s.roles[r] ? s.roles[r].name : r || '';
+}
+
+function aliveIds(room) {
+  if (!room || !room.alive) return [];
+  return Object.keys(room.alive).filter(id => room.alive[id]);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function checkWin(room) {
+  const alive = aliveIds(room);
+  const wolves = alive.filter(id => room.roles[id] === 'werewolf');
+  const villagers = alive.filter(id => room.roles[id] !== 'werewolf');
+
+  if (wolves.length === 0) return 'villagers';
+  if (wolves.length >= villagers.length) return 'werewolves';
+  return null;
+}
+
+function renderRoleBadge() {
+  if (!room || !room.roles || !room.roles[me.id]) return '';
+  const rKey = room.roles[me.id];
+  const s = t();
+  const rObj = s.roles ? s.roles[rKey] : null;
+  return `
+    <div class="center" style="margin-bottom:12px;">
+      <div class="roletag">${ROLE_ICON[rKey] || '🎭'} ${rObj ? rObj.name : rKey}</div>
+    </div>
+  `;
+}
+
+function updateSpeakingUI(playerId, isSpeaking) {
+  const card = document.querySelector(`.pcard[data-id="${playerId}"]`);
+  if (!card) return;
+  if (isSpeaking) {
+    card.classList.add('speaking');
+    if (!card.querySelector('.speaking-wave')) {
+      const wave = document.createElement('div');
+      wave.className = 'speaking-wave';
+      wave.innerText = '🔊';
+      card.appendChild(wave);
+    }
+  } else {
+    card.classList.remove('speaking');
+    const wave = card.querySelector('.speaking-wave');
+    if (wave) wave.remove();
+  }
+}
+
+function updateVoiceBarUI() {
+  const vIndicator = document.getElementById('vIndicator');
+  const vStatusText = document.getElementById('vStatusText');
+  const vBtns = document.getElementById('vBtns');
+  const s = t();
+
+  if (!vIndicator || !vStatusText || !vBtns) return;
+
+  if (!isVoiceConnected) {
+    vIndicator.className = 'v-indicator';
+    vStatusText.innerText = s.voiceOff;
+    vBtns.innerHTML = `<button class="v-btn primary" id="btnJoinVoice">${s.joinVoice}</button>`;
+  } else {
+    vIndicator.className = `v-indicator ${isMicMuted ? 'muted' : 'active'}`;
+    vStatusText.innerText = s.voiceConn;
+    vBtns.innerHTML = `
+      <button class="v-btn ${isMicMuted ? 'danger' : ''}" id="btnMute">${isMicMuted ? s.unmuteMic : s.muteMic}</button>
+      <button class="v-btn ${isDeafened ? 'danger' : ''}" id="btnDeafen">${isDeafened ? s.undeafen : s.deafen}</button>
+      <button class="v-btn danger" id="btnLeaveVoice">${s.leaveVoice}</button>
+    `;
+  }
+
+  bindVoiceBarEvents();
+}
+
+function bindVoiceBarEvents() {
+  const btnJoin = document.getElementById('btnJoinVoice');
+  const btnMute = document.getElementById('btnMute');
+  const btnDeafen = document.getElementById('btnDeafen');
+  const btnLeave = document.getElementById('btnLeaveVoice');
+
+  if (btnJoin) btnJoin.onclick = joinVoiceChat;
+  if (btnMute) btnMute.onclick = toggleMute;
+  if (btnDeafen) btnDeafen.onclick = toggleDeafen;
+  if (btnLeave) btnLeave.onclick = leaveVoiceChat;
+}
+
+async function joinVoiceChat() {
+  try {
+    localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    isVoiceConnected = true;
+    setupAudioAnalysis(localAudioStream, me.id);
+    updateVoiceBarUI();
+    connectVoiceToRoomPeers();
+  } catch (err) {
+    alert('Microphone access denied or unavailable: ' + err.message);
+  }
+}
+
+function toggleMute() {
+  if (!localAudioStream) return;
+  isMicMuted = !isMicMuted;
+  localAudioStream.getAudioTracks().forEach(track => track.enabled = !isMicMuted);
+  updateVoiceBarUI();
+}
+
+function toggleDeafen() {
+  isDeafened = !isDeafened;
+  Object.values(remoteAudioElements).forEach(audio => audio.muted = isDeafened);
+  updateVoiceBarUI();
+}
+
+function leaveVoiceChat() {
+  if (localAudioStream) {
+    localAudioStream.getTracks().forEach(track => track.stop());
+    localAudioStream = null;
+  }
+  isVoiceConnected = false;
+  isMicMuted = false;
+  isDeafened = false;
+  updateVoiceBarUI();
+}
+
+function connectVoiceToRoomPeers() {
+  if (!peer || !localAudioStream || !room || !room.players) return;
+
+  room.players.forEach(p => {
+    if (p.id !== me.id && p.peerId && !peerCalls[p.peerId]) {
+      const call = peer.call(p.peerId, localAudioStream);
+      if (call) handleVoiceCall(call, p.id);
+    }
+  });
+
+  peer.on('call', (call) => {
+    if (!localAudioStream) return;
+    call.answer(localAudioStream);
+    const callerPlayer = room.players.find(p => p.peerId === call.peer);
+    const callerId = callerPlayer ? callerPlayer.id : call.peer;
+    handleVoiceCall(call, callerId);
+  });
+}
+
+function handleVoiceCall(call, playerId) {
+  peerCalls[call.peer] = call;
+  call.on('stream', (remoteStream) => {
+    if (!remoteAudioElements[call.peer]) {
+      const audio = new Audio();
+      audio.srcObject = remoteStream;
+      audio.autoplay = true;
+      audio.muted = isDeafened;
+      remoteAudioElements[call.peer] = audio;
+      setupAudioAnalysis(remoteStream, playerId);
+    }
+  });
+  call.on('close', () => {
+    delete peerCalls[call.peer];
+    if (remoteAudioElements[call.peer]) {
+      remoteAudioElements[call.peer].remove();
+      delete remoteAudioElements[call.peer];
+    }
+  });
+}
+
+function handleClientAction(data) {
+  if (!me.isHost) return;
+  if (data.action === 'NIGHT_SUBMIT') {
+    if (data.myRole === 'werewolf') room.night.wolfVotes[data.playerId] = data.targetId;
+    if (data.myRole === 'seer') room.night.seerTarget[data.playerId] = data.targetId;
+    if (data.myRole === 'doctor') room.night.doctorTarget[data.playerId] = data.targetId;
+    broadcastState();
+  } else if (data.action === 'VOTE_SUBMIT') {
+    room.votes[data.playerId] = data.targetId;
+    broadcastState();
+  } else if (data.action === 'HUNTER_SHOT') {
+    const targetId = data.targetId;
+    const shooter = room.hunterPending;
+    room.alive[targetId] = false;
+    room.log.push({ type: 'hunter_shot', a: shooter, b: targetId });
+    room.hunterPending = null;
+    const cameFromDay = room._returnPhase === 'day';
+    room._returnPhase = null;
+    const win = checkWin(room);
+    if (win) {
+      room.winner = win;
+      room.phase = 'ended';
+      room.log.push({ type: win === 'villagers' ? 'win_villagers' : 'win_wolves' });
+    } else if (cameFromDay) {
+      room.round += 1;
+      room.phase = 'night';
+      room.night = { wolfVotes: {}, doctorTarget: {}, seerTarget: {} };
+      room.log.push({ type: 'night_begin', round: room.round });
+    } else {
+      room.phase = 'voting';
+    }
+    broadcastState();
+  }
+}
+
+function resolveNight() {
+  if (!me.isHost) return;
+  const wolfTally = {};
+  Object.values(room.night.wolfVotes).forEach(tid => {
+    wolfTally[tid] = (wolfTally[tid] || 0) + 1;
+  });
+  let maxVotes = 0;
+  let victimId = null;
+  Object.keys(wolfTally).forEach(tid => {
+    if (wolfTally[tid] > maxVotes) {
+      maxVotes = wolfTally[tid];
+      victimId = tid;
+    }
+  });
+
+  const docTarget = Object.values(room.night.doctorTarget)[0];
+  const deaths = [];
+  if (victimId && victimId !== docTarget) {
+    deaths.push(victimId);
+  }
+
+  deaths.forEach(id => {
+    room.alive[id] = false;
+  });
+
+  if (deaths.length === 0) {
+    room.log.push({ type: 'peaceful' });
+  } else {
+    room.log.push({ type: 'deaths', ids: deaths });
+  }
+
+  const hunterDied = deaths.find(id => room.roles[id] === 'hunter');
+  if (hunterDied) {
+    room.hunterPending = hunterDied;
+    room._returnPhase = 'night';
+    room.phase = 'hunter_revenge';
+  } else {
+    const win = checkWin(room);
+    if (win) {
+      room.winner = win;
+      room.phase = 'ended';
+      room.log.push({ type: win === 'villagers' ? 'win_villagers' : 'win_wolves' });
+    } else {
+      room.phase = 'voting';
+      room.votes = {};
+    }
+  }
+  broadcastState();
+}
+
+function resolveVote() {
+  if (!me.isHost) return;
+  const tally = {};
+  Object.values(room.votes).forEach(tid => {
+    tally[tid] = (tally[tid] || 0) + 1;
+  });
+
+  let maxVotes = 0;
+  let topTarget = null;
+  let isTie = false;
+
+  Object.keys(tally).forEach(tid => {
+    if (tally[tid] > maxVotes) {
+      maxVotes = tally[tid];
+      topTarget = tid;
+      isTie = false;
+    } else if (tally[tid] === maxVotes) {
+      isTie = true;
+    }
+  });
+
+  if (isTie || !topTarget) {
+    room.log.push({ type: 'vote_tie' });
+  } else {
+    room.alive[topTarget] = false;
+    room.log.push({ type: 'vote_result', id: topTarget });
+
+    if (room.roles[topTarget] === 'hunter') {
+      room.hunterPending = topTarget;
+      room._returnPhase = 'day';
+      room.phase = 'hunter_revenge';
+      broadcastState();
+      return;
+    }
+  }
+
+  const win = checkWin(room);
+  if (win) {
+    room.winner = win;
+    room.phase = 'ended';
+    room.log.push({ type: win === 'villagers' ? 'win_villagers' : 'win_wolves' });
+  } else {
+    room.round += 1;
+    room.phase = 'night';
+    room.night = { wolfVotes: {}, doctorTarget: {}, seerTarget: {} };
+    room.log.push({ type: 'night_begin', round: room.round });
+  }
+  broadcastState();
+}
+
+function renderLanding() {
+  const s = t();
+  content.innerHTML = `
+    <div class="eyebrow">${s.eyebrow}</div>
+    <h1>${s.title1} <span>${s.title1accent}</span></h1>
+    <div class="sub">${s.subLanding}</div>
+    <div class="choice-grid">
+      <div class="choice" id="hostChoice"><b>${s.hostTitle}</b>${s.hostDesc}</div>
+      <div class="choice" id="joinChoice"><b>${s.joinTitle}</b>${s.joinDesc}</div>
+    </div>
+  `;
+  document.getElementById('hostChoice').onclick = () => { screen = 'host_setup'; render(); };
+  document.getElementById('joinChoice').onclick = () => { screen = 'join_setup'; render(); };
+}
+
+function renderLobby() {
+  const s = t();
+  const isHost = me.isHost;
+  const canStart = room.players.length >= 4;
+
+  content.innerHTML = `
+    <div class="eyebrow">${s.waitingRoom}</div>
+    <h1>${s.room} <span class="code-display">${room.code}</span></h1>
+    <div class="sub">${s.codeHintShare}</div>
+    <div class="card">
+      <label>${s.playersJoined} (${room.players.length})</label>
+      <ul class="plist">
+        ${room.players.map(p => `<li><span><span class="dot"></span>${p.name}${p.id === me.id ? ' ' + s.you : ''}</span> <span>${avatarFor(p)}</span></li>`).join('')}
+      </ul>
+      ${isHost ? `
+        <button id="startBtn" ${!canStart ? 'disabled' : ''}>${s.startGame}</button>
+        ${!canStart ? `<div class="err">${s.needFour}</div>` : ''}
+      ` : `<div class="sub center" style="margin-top:14px;">${s.waitingOthers}</div>`}
+    </div>
+    <div class="back" id="exitLobbyBtn">${isHost ? s.cancelRoom : s.leaveRoom}</div>
+  `;
+
+  document.getElementById('exitLobbyBtn').onclick = () => {
+    if (peer) peer.destroy();
+    screen = 'landing';
+    room = null;
+    render();
+  };
+
+  if (isHost) {
+    const sb = document.getElementById('startBtn');
+    if (sb) sb.onclick = () => {
+      const players = [...room.players];
+      for (let i = players.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [players[i], players[j]] = [players[j], players[i]];
+      }
+      const numWolves = players.length >= 6 ? 2 : 1;
+      const roles = {};
+      const alive = {};
+
+      players.forEach((p, idx) => {
+        alive[p.id] = true;
+        if (idx < numWolves) roles[p.id] = 'werewolf';
+        else if (idx === numWolves) roles[p.id] = 'seer';
+        else if (idx === numWolves + 1) roles[p.id] = 'doctor';
+        else if (idx === numWolves + 2 && players.length >= 5) roles[p.id] = 'hunter';
+        else roles[p.id] = 'villager';
+      });
+
+      room.roles = roles;
+      room.alive = alive;
+      room.round = 1;
+      room.phase = 'reveal';
+      room.log.push({ type: 'game_start' });
+      room.log.push({ type: 'night_begin', round: 1 });
+      broadcastState();
+    };
+  }
+}
+
+function renderReveal() {
+  const s = t();
+  const myRole = room.roles[me.id];
+  const rObj = s.roles ? s.roles[myRole] : null;
+  const isHost = me.isHost;
+
+  content.innerHTML = `
+    <div class="eyebrow">${s.revealEyebrow}</div>
+    <h1>${s.revealTitle} <span>${s.revealAccent}</span></h1>
+    <div class="sub">${s.subReveal}</div>
+
+    <div class="flipzone">
+      <div class="flipcard ${flipState.flipped ? 'flipped' : ''}" id="myFlipCard">
+        <div class="flipinner">
+          <div class="face front">
+            <div class="moonicon">🌕</div>
+            <div class="tapline">${s.tapReveal}</div>
+          </div>
+          <div class="face back">
+            <div class="roleicon">${ROLE_ICON[myRole] || '🎭'}</div>
+            <div class="rolename">${rObj ? rObj.name : myRole}</div>
+            <div class="roledesc">${rObj ? rObj.desc : ''}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      ${isHost ? `<button id="startNightBtn">${s.beginNight}</button>` : `<div class="sub center">${s.waitingOthers}</div>`}
+    </div>
+  `;
+
+  document.getElementById('myFlipCard').onclick = () => {
+    flipState.flipped = !flipState.flipped;
+    render();
+  };
+
+  if (isHost) {
+    document.getElementById('startNightBtn').onclick = () => {
+      room.phase = 'night';
+      broadcastState();
+    };
+  }
+}
+
+function render() {
+  document.documentElement.dir = t().dir || 'ltr';
+  document.body.dir = t().dir || 'ltr';
+
+  const btnEN = document.getElementById('btnEN');
+  const btnAR = document.getElementById('btnAR');
+  if (btnEN) btnEN.className = `langbtn ${lang === 'en' ? 'active' : ''}`;
+  if (btnAR) btnAR.className = `langbtn ${lang === 'ar' ? 'active' : ''}`;
+
+  if (!room) {
+    if (screen === 'landing') renderLanding();
+    else if (screen === 'host_setup') renderHostSetup();
+    else if (screen === 'join_setup') renderJoinSetup();
+  } else {
+    if (room.phase === 'lobby') renderLobby();
+    else if (room.phase === 'reveal') renderReveal();
+    else if (room.phase === 'night') renderNight();
+    else if (room.phase === 'voting') renderVoting();
+    else if (room.phase === 'hunter_revenge') renderHunterRevenge();
+    else if (room.phase === 'ended') renderEnded();
+  }
+
+  updateVoiceBarUI();
+}
+
+// Bind top language switches
+document.getElementById('btnEN').onclick = () => { lang = 'en'; render(); };
+document.getElementById('btnAR').onclick = () => { lang = 'ar'; render(); };
 
 // Initial render call
 updateVoiceBarUI();
