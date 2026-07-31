@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Werewolf</title>
+<!-- Include PeerJS Library for Peer-to-Peer Networking -->
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --ink:#0a0c10;
+    --paper:#12151b;
+    --paper2:#181c24;
+    --line:#262b35;
+    --moon:#d9c98a;
+    --moon-dim:#8a7f52;
+    --blood:#b8443a;
+    --good:#4fa88a;
+    --text:#e8e6df;
+    --dim:#868b96;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse at 50% -10%, #1b2030 0%, var(--ink) 55%);
+    color:var(--text);
+    font-family: Georgia, 'Iowan Old Style', serif;
+    min-height:100vh;
+    padding:20px 14px 60px;
+  }
+  body[dir="rtl"]{ font-family:'Tahoma','Segoe UI',Georgia,serif; }
+  .wrap{max-width:640px; margin:0 auto;}
+  .langbar{display:flex; justify-content:center; gap:8px; margin-bottom:16px;}
+  .langbtn{
+    font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.1em;
+    padding:6px 14px; border:1px solid var(--line); color:var(--dim);
+    background:transparent; border-radius:20px; cursor:pointer;
+  }
+  .langbtn.active{border-color:var(--moon-dim); color:var(--moon);}
+  #banner{display:none; background:#3a2323; border:1px solid var(--blood); color:#f0d9d6; font-size:12.5px; padding:10px 14px; border-radius:4px; margin-bottom:14px; font-family:'Courier New',monospace; text-align:center;}
+  .eyebrow{font-family:'Courier New', monospace; letter-spacing:0.28em; text-transform:uppercase; font-size:11px; color:var(--moon-dim); text-align:center; margin-bottom:6px;}
+  body[dir="rtl"] .eyebrow{letter-spacing:0.08em;}
+  h1{text-align:center; font-size:30px; margin:0 0 4px; font-weight:400;}
+  h1 span{color:var(--moon);}
+  .sub{text-align:center; color:var(--dim); font-size:13px; margin-bottom:22px; font-family:'Courier New', monospace;}
+  body[dir="rtl"] .sub{font-family:inherit;}
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:3px; padding:22px; position:relative; margin-bottom:16px;}
+  .card::before{content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg, transparent, var(--moon-dim), transparent);}
+  label{display:block; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); margin-bottom:8px; margin-top:16px;}
+  body[dir="rtl"] label{font-family:inherit; letter-spacing:0.02em;}
+  label:first-child{margin-top:0;}
+  input, select{width:100%; background:var(--paper2); border:1px solid var(--line); color:var(--text); padding:12px 13px; font-size:16px; font-family:Georgia,serif; border-radius:2px; outline:none;}
+  body[dir="rtl"] input, body[dir="rtl"] select{font-family:inherit; text-align:right;}
+  input:focus, select:focus{border-color:var(--moon-dim);}
+  input::placeholder{color:#565c68;}
+  button{width:100%; padding:14px; background:var(--moon); color:#141414; border:none; font-family:'Courier New', monospace; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; font-size:13px; border-radius:2px; margin-top:18px; cursor:pointer;}
+  body[dir="rtl"] button{font-family:inherit; letter-spacing:0.02em;}
+  button:active{opacity:0.75;}
+  button.ghost{background:transparent; border:1px solid var(--line); color:var(--text);}
+  button.danger{background:var(--blood); color:#fff;}
+  button.small{margin-top:10px; padding:10px; font-size:11px;}
+  button:disabled{opacity:0.35;}
+  .choice-grid{display:flex; gap:10px; margin-top:6px;}
+  .choice{flex:1; border:1px solid var(--line); background:var(--paper2); padding:20px 8px; text-align:center; border-radius:2px; cursor:pointer; font-family:'Courier New', monospace; text-transform:uppercase; font-size:12px; color:var(--dim);}
+  body[dir="rtl"] .choice{font-family:inherit; letter-spacing:0;}
+  .choice b{display:block; font-family:Georgia,serif; font-size:19px; color:var(--text); text-transform:none; margin-bottom:4px;}
+  body[dir="rtl"] .choice b{font-family:inherit;}
+  .code-display{text-align:center; font-family:'Courier New', monospace; letter-spacing:0.35em; font-size:34px; color:var(--moon); margin:6px 0 4px; direction:ltr;}
+  .plist{list-style:none; padding:0; margin:12px 0 0;}
+  .plist li{display:flex; align-items:center; justify-content:space-between; padding:10px 4px; border-bottom:1px solid var(--line); font-size:15px;}
+  .plist li:last-child{border-bottom:none;}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--moon); display:inline-block; margin-inline-end:9px;}
+  .empty{color:var(--dim); font-size:13px; font-family:'Courier New', monospace; text-align:center; padding:16px 0;}
+  .err{color:var(--blood); font-size:12px; font-family:'Courier New', monospace; margin-top:10px; text-align:center; min-height:14px;}
+  .back{text-align:center; margin-top:14px; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.1em; color:var(--dim); cursor:pointer; text-decoration:underline;}
+  body[dir="rtl"] .back{font-family:inherit;}
+  .pulse{animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+  /* Flip card */
+  .flipzone{display:flex; justify-content:center; padding:14px 0 6px;}
+  .flipcard{width:200px; height:280px; perspective:1200px; cursor:pointer;}
+  .flipinner{position:relative; width:100%; height:100%; transition:transform .7s cubic-bezier(.4,.2,.2,1); transform-style:preserve-3d;}
+  .flipcard.flipped .flipinner{transform:rotateY(180deg);}
+  .face{position:absolute; inset:0; backface-visibility:hidden; border-radius:10px; border:1px solid var(--moon-dim); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; text-align:center;}
+  .face.front{background:
+      repeating-linear-gradient(135deg, #1b2030, #1b2030 8px, #171b25 8px, #171b25 16px);
+    box-shadow:inset 0 0 40px rgba(0,0,0,0.6);
+  }
+  .face.front .moonicon{font-size:52px; filter:drop-shadow(0 0 14px rgba(217,201,138,0.5));}
+  .face.front .tapline{margin-top:14px; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.15em; color:var(--moon-dim); text-transform:uppercase;}
+  body[dir="rtl"] .face.front .tapline{font-family:inherit; letter-spacing:0.02em;}
+  .face.back{background:var(--paper2); transform:rotateY(180deg);}
+  .face.back .roleicon{font-size:56px; margin-bottom:8px;}
+  .face.back .rolename{font-size:23px; color:var(--moon); margin-bottom:8px;}
+  .face.back .roledesc{font-size:12.5px; color:var(--dim); line-height:1.5;}
+
+  /* Player card grid */
+  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(96px,1fr)); gap:10px; margin-top:12px;}
+  .pcard{position:relative; background:var(--paper2); border:1.5px solid var(--line); border-radius:6px; padding:12px 6px 10px; text-align:center; cursor:pointer; transition:border-color .15s;}
+  .pcard .av{font-size:26px; margin-bottom:6px;}
+  .pcard .nm{font-size:12.5px; color:var(--text); word-break:break-word;}
+  .pcard.selected{border-color:var(--moon); box-shadow:0 0 0 1px var(--moon);}
+  .pcard.dead{opacity:0.45;}
+  .pcard.disabled{cursor:default;}
+  .pcard .skull{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:28px; background:rgba(10,10,12,0.55); border-radius:6px;}
+  .pcard .rolebadge{position:absolute; top:-6px; inset-inline-end:-6px; font-size:15px; background:var(--paper); border:1px solid var(--line); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center;}
+
+  /* Log */
+  .log{max-height:190px; overflow-y:auto; background:var(--paper2); border:1px solid var(--line); border-radius:3px; padding:12px 14px; font-size:13.5px; line-height:1.7;}
+  .log .entry{border-bottom:1px dashed #262b35; padding:6px 0;}
+  .log .entry:last-child{border-bottom:none;}
+  .log .entry.death{color:var(--blood);}
+  .log .entry.safe{color:var(--good);}
+  .log .entry.win{color:var(--moon); font-weight:bold;}
+
+  .roletag{display:inline-flex; align-items:center; gap:6px; font-family:'Courier New', monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--moon); border:1px solid var(--moon-dim); padding:4px 10px; border-radius:20px; margin-bottom:6px;}
+  body[dir="rtl"] .roletag{font-family:inherit; letter-spacing:0.02em;}
+  .center{text-align:center;}
+  .progress{font-family:'Courier New', monospace; font-size:12px; color:var(--dim); text-align:center; margin-top:10px;}
+  body[dir="rtl"] .progress{font-family:inherit;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="langbar">
+    <button class="langbtn" id="btnEN" style="width:auto;margin:0;">English</button>
+    <button class="langbtn" id="btnAR" style="width:auto;margin:0;">العربية</button>
+  </div>
+  <div id="banner"></div>
+  <div id="content"></div>
+</div>
+
+<script>
+const content = document.getElementById('content');
+const bannerEl = document.getElementById('banner');
+let lang = 'en';
+let me = { id:'p_'+Math.random().toString(36).slice(2,10), name:'', isHost:false };
+let roomCode = '';
+let room = null;
+let screen = 'landing';
+let draft = { hostName:'', joinCode:'', joinName:'' };
+let flipState = { flipped:false, ready:false };
+let selection = null;
+
+// PeerJS Networking setup
+let peer = null;
+let hostConn = null; // Used by clients to communicate with Host
+let clientConns = []; // Used by Host to store client connections
+
+const PEER_PREFIX = 'ww_room_v2_';
+
+function broadcastState() {
+  if (me.isHost) {
+    clientConns.forEach(c => {
+      if (c && c.open) c.send({ type: 'STATE', room });
+    });
+    render();
+  }
+}
+
+function sendToHost(msg) {
+  if (hostConn && hostConn.open) {
+    hostConn.send(msg);
+  }
+}
+
+// ---------------- i18n ----------------
+const T = {
+  en:{ dir:'ltr',
+    eyebrow:"When the sun sets, someone lies",
+    title1:"WERE", title1accent:"WOLF",
+    subLanding:"a hidden-role game for the room you're in",
+    hostTitle:"Host", hostDesc:"create & run the game",
+    joinTitle:"Join", joinDesc:"enter a room code",
+    step1:"Step 1", back:"back",
+    setupTitle:"New", setupAccent:"Game",
+    subSetup:"you'll play too — roles are assigned once everyone's in",
+    yourName:"Your name", namePH:"e.g. Sam",
+    createRoom:"Create Room",
+    enterNameFirst:"Enter your name first.",
+    joinTitleFull:"Join a", joinAccent:"Room",
+    subJoin:"ask the host for the 4-letter code",
+    roomCode:"Room code",
+    joinRoomBtn:"Join Room",
+    codeMustBe4:"Room code is 4 letters.",
+    enterName:"Enter your name.",
+    noRoomFound:"No room found or host disconnected.",
+    alreadyStarted:"That game already started.",
+    nameTaken:"That name is already taken in this room.",
+    connErr:"Connection problem — try again.",
+    waitingRoom:"Waiting room", room:"Room",
+    codeHintShare:"share this code so friends can join",
+    playersJoined:"Players", none:"no one yet...",
+    you:"(you)",
+    needFour:"Need at least 4 players.",
+    startGame:"Start Game",
+    cancelRoom:"cancel room", leaveRoom:"leave room",
+    rolesPreview:(n)=>`with ${n} players`,
+    revealEyebrow:"Round "+"1", revealTitle:"Your", revealAccent:"Role",
+    subReveal:"tap the card to see who you are",
+    tapReveal:"tap to reveal",
+    imReady:"I'm Ready", waitingOthers:"waiting for the host to start",
+    autoStartIn:(sec)=> sec>0 ? `Night begins automatically in ${sec}s` : `Starting...`,
+    yourRoleLabel:"Your role",
+    beginNight:"Begin First Night",
+    nightEyebrow:(r)=>`Night ${r}`,
+    nightTitle:"The Village", nightAccent:"Sleeps",
+    yourTurnWolf:"Choose your victim",
+    yourTurnSeer:"Choose someone to see their aura",
+    yourTurnDoctor:"Choose someone to protect",
+    submitChoice:"Confirm Choice",
+    choiceLocked:"Choice locked in.",
+    waitingNight:"It's night. Special roles are acting. Sit tight.",
+    villagerNightNote:"Villagers have no night power — just wait for dawn.",
+    auraResultGood:"aura is calm. They seem GOOD.",
+    auraResultBad:"aura is dark. They seem BAD.",
+    nightProgress:(a,b)=>`${a} / ${b} night actions submitted`,
+    resolveNight:"Resolve Night (Host)",
+    forceResolve:"Force Resolve",
+    dayEyebrow:(r)=>`Day ${r}`,
+    dayTitle:"Dawn", dayAccent:"Breaks",
+    continueToVote:"Continue to Voting",
+    votingTitle:"Cast Your", votingAccent:"Vote",
+    subVoting:"tap a player, then confirm",
+    voteFor:"Vote to Eliminate",
+    voteLocked:"Vote locked in.",
+    voteProgress:(a,b)=>`${a} / ${b} votes in`,
+    resolveVote:"Resolve Vote (Host)",
+    waitingVote:"Waiting for the village to vote...",
+    hunterRevengeTitle:"Hunter's", hunterRevengeAccent:"Revenge",
+    subHunterRevenge:"you were killed — take one more with you",
+    subHunterRevengeWatch:"the Hunter is choosing a final target...",
+    confirmShot:"Take Aim",
+    endEyebrow:"Game Over",
+    winVillagers:"THE VILLAGE WINS", winWolves:"THE WEREWOLVES WIN",
+    finalRoles:"Final Roles",
+    playAgain:"Play Again (Host)",
+    exitGame:"exit to menu",
+    log_game_start:"Night falls on the village for the first time.",
+    log_night_begin:(r)=>`Night ${r} begins. Everyone closes their eyes.`,
+    log_peaceful:"The village wakes up. No one was harmed — the Doctor's watch held.",
+    log_deaths:(names)=>`The village wakes up to find ${names} torn apart in the night.`,
+    log_hunter_shot:(a,b)=>`Before their last breath, ${a} the Hunter fires — taking ${b} with them.`,
+    log_vote_tie:"The vote is split. No one is eliminated.",
+    log_vote_result:(name,role)=>`${name} is voted out by the village. They were... a ${role}.`,
+    log_win_villagers:"Every werewolf has been hunted down. The village is safe.",
+    log_win_wolves:"The werewolves now equal the villagers. Darkness has won.",
+    roles:{
+      werewolf:{name:"Werewolf", desc:"Each night, choose a victim together with the other wolves."},
+      seer:{name:"Aura Seer", desc:"Each night, check one player — their aura is good or bad."},
+      doctor:{name:"Doctor", desc:"Each night, choose one player to protect from the wolves."},
+      hunter:{name:"Hunter", desc:"If you die, you take one other player down with you."},
+      villager:{name:"Villager", desc:"No power. Use your voice, watch closely, vote wisely."}
+    }
+  },
+  ar:{ dir:'rtl',
+    eyebrow:"حين تغرب الشمس، يكذب أحدهم",
+    title1:"مستذئب", title1accent:"",
+    subLanding:"لعبة أدوار خفية لمن يجلسون معك الآن",
+    hostTitle:"مضيف", hostDesc:"أنشئ اللعبة وأدرها",
+    joinTitle:"انضمام", joinDesc:"أدخل رمز الغرفة",
+    step1:"الخطوة ١", back:"رجوع",
+    setupTitle:"لعبة", setupAccent:"جديدة",
+    subSetup:"ستلعب أنت أيضًا — تُوزّع الأدوار بعد انضمام الجميع",
+    yourName:"اسمك", namePH:"مثال: سامي",
+    createRoom:"إنشاء الغرفة",
+    enterNameFirst:"أدخل اسمك أولاً.",
+    joinTitleFull:"الانضمام إلى", joinAccent:"غرفة",
+    subJoin:"اطلب من المضيف رمز الغرفة",
+    roomCode:"رمز الغرفة",
+    joinRoomBtn:"انضم إلى الغرفة",
+    codeMustBe4:"رمز الغرفة مكوّن من ٤ أحرف.",
+    enterName:"أدخل اسمك.",
+    noRoomFound:"لم يتم العثور على غرفة أو تم قطع الاتصال.",
+    alreadyStarted:"اللعبة بدأت بالفعل.",
+    nameTaken:"هذا الاسم مستخدم بالفعل في هذه الغرفة.",
+    connErr:"مشكلة في الاتصال — حاول مجددًا.",
+    waitingRoom:"غرفة الانتظار", room:"الغرفة",
+    codeHintShare:"شارك هذا الرمز مع أصدقائك للانضمام",
+    playersJoined:"اللاعبون", none:"لا أحد بعد...",
+    you:"(أنت)",
+    needFour:"يلزم ٤ لاعبين على الأقل.",
+    startGame:"ابدأ اللعبة",
+    cancelRoom:"إلغاء الغرفة", leaveRoom:"مغادرة الغرفة",
+    rolesPreview:(n)=>`بعدد ${n} لاعبين`,
+    revealEyebrow:"الجولة ١", revealTitle:"دورك", revealAccent:"",
+    subReveal:"اضغط على البطاقة لترى من أنت",
+    tapReveal:"اضغط للكشف",
+    imReady:"أنا جاهز", waitingOthers:"في انتظار بدء المضيف",
+    autoStartIn:(sec)=> sec>0 ? `تبدأ الليلة تلقائيًا خلال ${sec} ث` : `جارٍ البدء...`,
+    yourRoleLabel:"دورك",
+    beginNight:"ابدأ الليلة الأولى",
+    nightEyebrow:(r)=>`الليلة ${r}`,
+    nightTitle:"القرية", nightAccent:"نائمة",
+    yourTurnWolf:"اختر ضحيتك",
+    yourTurnSeer:"اختر شخصًا لترى هالته",
+    yourTurnDoctor:"اختر شخصًا لتحميه",
+    submitChoice:"تأكيد الاختيار",
+    choiceLocked:"تم تثبيت اختيارك.",
+    waitingNight:"الليل الآن. أصحاب الأدوار الخاصة يتصرفون. انتظر قليلاً.",
+    villagerNightNote:"القرويون ليس لديهم قدرة ليلية — انتظروا الفجر فقط.",
+    auraResultGood:"هالته هادئة. يبدو أنه جيد.",
+    auraResultBad:"هالته مظلمة. يبدو أنه شرير.",
+    nightProgress:(a,b)=>`${a} / ${b} تصرفات ليلية مُقدَّمة`,
+    resolveNight:"إنهاء الليل (المضيف)",
+    forceResolve:"إنهاء إجباري",
+    dayEyebrow:(r)=>`النهار ${r}`,
+    dayTitle:"الفجر", dayAccent:"يبزغ",
+    continueToVote:"الانتقال إلى التصويت",
+    votingTitle:"أدلِ بـ", votingAccent:"صوتك",
+    subVoting:"اضغط على لاعب ثم أكّد",
+    voteFor:"صوّت للإقصاء",
+    voteLocked:"تم تثبيت صوتك.",
+    voteProgress:(a,b)=>`${a} / ${b} أصوات وردت`,
+    resolveVote:"إنهاء التصويت (المضيف)",
+    waitingVote:"في انتظار تصويت القرية...",
+    hunterRevengeTitle:"انتقام", hunterRevengeAccent:"الصياد",
+    subHunterRevenge:"لقد قُتلت — خذ معك شخصًا آخر",
+    subHunterRevengeWatch:"الصياد يختار هدفه الأخير...",
+    confirmShot:"صوّب",
+    endEyebrow:"انتهت اللعبة",
+    winVillagers:"القرية تفوز", winWolves:"الذئاب تفوز",
+    finalRoles:"الأدوار النهائية",
+    playAgain:"العب مجددًا (المضيف)",
+    exitGame:"الخروج للقائمة",
+    log_game_start:"يهبط الليل على القرية لأول مرة.",
+    log_night_begin:(r)=>`تبدأ الليلة ${r}. يغلق الجميع أعينهم.`,
+    log_peaceful:"تستيقظ القرية. لم يتأذَّ أحد — حراسة الطبيب نجحت.",
+    log_deaths:(names)=>`تستيقظ القرية لتجد ${names} قد مزّقتهم الذئاب في الليل.`,
+    log_hunter_shot:(a,b)=>`قبل أن يلفظ أنفاسه الأخيرة، أطلق الصياد ${a} النار — وأخذ معه ${b}.`,
+    log_vote_tie:"تعادلت الأصوات. لم يُقصَ أحد.",
+    log_vote_result:(name,role)=>`أقصت القرية ${name} بالتصويت. لقد كان... ${role}.`,
+    log_win_villagers:"قُضي على جميع الذئاب. القرية آمنة الآن.",
+    log_win_wolves:"تساوى عدد الذئاب مع القرويين. انتصر الظلام.",
+    roles:{
+      werewolf:{name:"مستذئب", desc:"كل ليلة، اختر ضحية مع بقية الذئاب."},
+      seer:{name:"العرّافة", desc:"كل ليلة، افحص هالة أحد اللاعبين — جيدة أم شريرة."},
+      doctor:{name:"الطبيب", desc:"كل ليلة، اختر شخصًا لتحميه من الذئاب."},
+      hunter:{name:"الصياد", desc:"إذا متّ، تأخذ معك لاعبًا آخر."},
+      villager:{name:"قروي", desc:"لا قدرة له. استخدم صوتك، راقب جيدًا، وصوّت بحكمة."}
+    }
+  }
+};
+function t(){ return T[lang]; }
+
+const ROLE_ICON = { werewolf:'🐺', seer:'👁️', doctor:'⚕️', hunter:'🏹', villager:'🧑\u200d🌾' };
+const AVATARS = ['🙂','😎','🧑','👩','👨','🧔','👱','🧑\u200d🦱','🧑\u200d🦳','🧑\u200d🦰'];
+function avatarFor(id){
+  let h=0; for(const c of id) h = (h*31 + c.charCodeAt(0))>>>0;
+  return AVATARS[h % AVATARS.length];
+}
+
+function setLang(l){
+  lang = l;
+  document.body.setAttribute('dir', T[l].dir);
+  document.getElementById('btnEN').classList.toggle('active', l==='en');
+  document.getElementById('btnAR').classList.toggle('active', l==='ar');
+  render();
+}
+document.getElementById('btnEN').onclick=()=>setLang('en');
+document.getElementById('btnAR').onclick=()=>setLang('ar');
+
+function randCode(){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZ'; let s='';
+  for(let i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)];
+  return s;
+}
+function showErr(id, msg){ const e=document.getElementById(id); if(e) e.textContent = msg; }
+
+function resetPeer() {
+  if (peer) { peer.destroy(); peer = null; }
+  clientConns = [];
+  hostConn = null;
+}
+
+// ---------------- role assignment ----------------
+function assignRoles(playerIds){
+  const n = playerIds.length;
+  const wolves = n>=10?3:(n>=6?2:1);
+  const hasHunter = n>=8;
+  const pool = [];
+  for(let i=0;i<wolves;i++) pool.push('werewolf');
+  pool.push('seer','doctor');
+  if(hasHunter) pool.push('hunter');
+  while(pool.length < n) pool.push('villager');
+  pool.length = n;
+  for(let i=pool.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [pool[i],pool[j]] = [pool[j],pool[i]];
+  }
+  const roles = {};
+  playerIds.forEach((id,i)=> roles[id]=pool[i]);
+  return roles;
+}
+
+function aliveIds(r){ return r.players.map(p=>p.id).filter(id=>r.alive[id]); }
+function aliveWolves(r){ return aliveIds(r).filter(id=>r.roles[id]==='werewolf'); }
+function playerName(r,id){ const p=r.players.find(p=>p.id===id); return p?p.name:'?'; }
+function roleName(r,id){ return t().roles[r.roles[id]].name; }
+
+// ---------------- render dispatcher ----------------
+function render(){
+  if(!roomCode){
+    if(screen==='hostSetup') return renderHostSetup();
+    if(screen==='joinSetup') return renderJoinSetup();
+    return renderLanding();
+  }
+  if(!room) return renderLoading();
+  switch(room.phase){
+    case 'lobby': return renderLobby();
+    case 'reveal': return renderReveal();
+    case 'night': return renderNight();
+    case 'night_hunter_revenge': return renderHunterRevenge();
+    case 'day_reveal': return renderDayReveal();
+    case 'voting': return renderVoting();
+    case 'day_hunter_revenge': return renderHunterRevenge();
+    case 'ended': return renderEnded();
+    default: return renderLoading();
+  }
+}
+
+function renderLoading(){
+  content.innerHTML = `<div class="sub pulse center">…</div>`;
+}
+
+// ---------------- landing / setup ----------------
+function renderLanding(){
+  resetPeer(); roomCode=''; room=null;
+  const s=t();
+  content.innerHTML = `
+    <div class="eyebrow">${s.eyebrow}</div>
+    <h1>${s.title1} <span>${s.title1accent}</span></h1>
+    <div class="sub">${s.subLanding}</div>
+    <div class="card">
+      <div class="choice-grid">
+        <div class="choice" id="hostBtn"><b>${s.hostTitle}</b>${s.hostDesc}</div>
+        <div class="choice" id="joinBtn"><b>${s.joinTitle}</b>${s.joinDesc}</div>
+      </div>
+    </div>
+  `;
+  document.getElementById('hostBtn').onclick=()=>{ screen='hostSetup'; render(); };
+  document.getElementById('joinBtn').onclick=()=>{ screen='joinSetup'; render(); };
+}
+
+function renderHostSetup(){
+  const s=t();
+  content.innerHTML = `
+    <div class="eyebrow">${s.step1}</div>
+    <h1>${s.setupTitle} <span>${s.setupAccent}</span></h1>
+    <div class="sub">${s.subSetup}</div>
+    <div class="card">
+      <label>${s.yourName}</label>
+      <input id="hostName" placeholder="${s.namePH}" maxlength="20" value="${draft.hostName}">
+      <button id="createBtn">${s.createRoom}</button>
+      <div class="err" id="err"></div>
+    </div>
+    <div class="back" id="backBtn">${lang==='ar'?'→ ':'← '}${s.back}</div>
+  `;
+  document.getElementById('hostName').oninput=(e)=>{ draft.hostName=e.target.value; };
+  document.getElementById('backBtn').onclick=()=>{ screen='landing'; render(); };
+  document.getElementById('createBtn').onclick = ()=>{
+    const name = document.getElementById('hostName').value.trim();
+    if(!name){ showErr('err', s.enterNameFirst); return; }
+    document.getElementById('createBtn').disabled = true;
+
+    me.name = name; me.isHost = true;
+    roomCode = randCode();
+
+    peer = new Peer(PEER_PREFIX + roomCode);
+
+    peer.on('open', ()=>{
+      room = {
+        code: roomCode, phase:'lobby', round:0,
+        players:[{id:me.id, name:me.name}],
+        roles:{}, alive:{},
+        night:{wolfVotes:{}, doctorTarget:{}, seerTarget:{}},
+        votes:{}, log:[{type:'created'}],
+        hunterPending:null, winner:null
+      };
+      render();
+    });
+
+    peer.on('connection', (conn)=>{
+      clientConns.push(conn);
+      conn.on('data', (data)=>{
+        if(!me.isHost) return;
+        if(data.type === 'JOIN') {
+          if(room.phase !== 'lobby') {
+            conn.send({type:'ERR', msg: t().alreadyStarted});
+            return;
+          }
+          if(room.players.some(p => p.name.toLowerCase() === data.name.toLowerCase())) {
+            conn.send({type:'ERR', msg: t().nameTaken});
+            return;
+          }
+          room.players.push({id: data.id, name: data.name});
+          conn.send({type:'JOIN_ACK', room});
+          broadcastState();
+        } else if(data.type === 'ACTION') {
+          handleClientAction(data);
+        }
+      });
+    });
+
+    peer.on('error', (err)=>{
+      showErr('err', s.connErr);
+      const btn=document.getElementById('createBtn'); if(btn) btn.disabled=false;
+    });
+  };
+}
+
+function handleClientAction(data) {
+  if (data.action === 'NIGHT_SUBMIT') {
+    const { myRole, playerId, targetId } = data;
+    if(myRole==='werewolf') room.night.wolfVotes[playerId]=targetId;
+    if(myRole==='seer') room.night.seerTarget[playerId]=targetId;
+    if(myRole==='doctor') room.night.doctorTarget[playerId]=targetId;
+    broadcastState();
+  } else if (data.action === 'HUNTER_SHOT') {
+    const shooter = room.hunterPending;
+    const targetId = data.targetId;
+    room.alive[targetId] = false;
+    room.log.push({type:'hunter_shot', a: shooter, b: targetId});
+    room.hunterPending = null;
+    const cameFromDay = room._returnPhase === 'day';
+    room._returnPhase = null;
+    const win = checkWin(room);
+    if(win){
+      room.winner=win; room.phase='ended'; room.log.push({type: win==='villagers'?'win_villagers':'win_wolves'});
+    } else if(cameFromDay){
+      room.round += 1;
+      room.phase = 'night';
+      room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
+      room.log.push({type:'night_begin', round:room.round});
+    } else {
+      room.phase = 'day_reveal';
+    }
+    broadcastState();
+  } else if (data.action === 'VOTE_SUBMIT') {
+    room.votes[data.playerId] = data.targetId;
+    broadcastState();
+  }
+}
+
+function renderJoinSetup(){
+  const s=t();
+  content.innerHTML = `
+    <div class="eyebrow">${s.step1}</div>
+    <h1>${s.joinTitleFull} <span>${s.joinAccent}</span></h1>
+    <div class="sub">${s.subJoin}</div>
+    <div class="card">
+      <label>${s.roomCode}</label>
+      <input id="codeIn" placeholder="ABCD" maxlength="4" style="text-transform:uppercase; letter-spacing:0.3em; text-align:center; font-size:22px; direction:ltr;" value="${draft.joinCode}">
+      <label>${s.yourName}</label>
+      <input id="nameIn" placeholder="${s.namePH}" maxlength="20" value="${draft.joinName}">
+      <button id="joinBtn2">${s.joinRoomBtn}</button>
+      <div class="err" id="err"></div>
+    </div>
+    <div class="back" id="backBtn">${lang==='ar'?'→ ':'← '}${s.back}</div>
+  `;
+  document.getElementById('codeIn').oninput=(e)=>{ draft.joinCode=e.target.value; };
+  document.getElementById('nameIn').oninput=(e)=>{ draft.joinName=e.target.value; };
+  document.getElementById('backBtn').onclick=()=>{ screen='landing'; render(); };
+  document.getElementById('joinBtn2').onclick = ()=>{
+    const code = document.getElementById('codeIn').value.trim().toUpperCase();
+    const name = document.getElementById('nameIn').value.trim();
+    if(code.length!==4){ showErr('err', s.codeMustBe4); return; }
+    if(!name){ showErr('err', s.enterName); return; }
+    document.getElementById('joinBtn2').disabled = true;
+
+    me.name = name; me.isHost = false;
+    roomCode = code;
+
+    peer = new Peer();
+    peer.on('open', ()=>{
+      hostConn = peer.connect(PEER_PREFIX + roomCode);
+
+      hostConn.on('open', ()=>{
+        hostConn.send({ type: 'JOIN', id: me.id, name: me.name });
+      });
+
+      hostConn.on('data', (data)=>{
+        if(data.type === 'ERR') {
+          showErr('err', data.msg);
+          document.getElementById('joinBtn2').disabled = false;
+        } else if(data.type === 'JOIN_ACK' || data.type === 'STATE') {
+          room = data.room;
+          render();
+        }
+      });
+
+      hostConn.on('close', ()=>{
+        showErr('err', s.noRoomFound);
+        document.getElementById('joinBtn2').disabled = false;
+      });
+    });
+
+    peer.on('error', (err)=>{
+      showErr('err', s.noRoomFound);
+      const btn=document.getElementById('joinBtn2'); if(btn) btn.disabled=false;
+    });
+  };
+}
+
+// ---------------- lobby ----------------
+function renderLobby(){
+  const s=t();
+  const isHost = me.isHost;
+  content.innerHTML = `
+    <div class="eyebrow">${s.waitingRoom}</div>
+    <h1>${s.room} <span>${room.code}</span></h1>
+    <div class="sub">${isHost ? s.codeHintShare : s.waitingOthers}</div>
+    <div class="card">
+      <div class="code-display">${room.code}</div>
+      <label>${s.playersJoined} <span style="opacity:.6">(${room.players.length})</span></label>
+      <ul class="plist" id="plist"></ul>
+      ${isHost ? `<button id="startBtn">${s.startGame}</button><div class="err" id="err"></div>` : ''}
+    </div>
+    <div class="back" id="backBtn">${isHost ? s.cancelRoom : s.leaveRoom}</div>
+  `;
+  const ul = document.getElementById('plist');
+  ul.innerHTML = room.players.map(p=>`<li><span><span class="dot"></span>${p.name}${p.id===me.id?' '+s.you:''}</span></li>`).join('') || `<div class="empty">${s.none}</div>`;
+  document.getElementById('backBtn').onclick=()=>{ screen='landing'; render(); };
+  if(isHost){
+    const startBtn = document.getElementById('startBtn');
+    startBtn.disabled = room.players.length < 4;
+    startBtn.onclick = ()=>{
+      if(room.players.length < 4){ showErr('err', s.needFour); return; }
+      const ids = room.players.map(p=>p.id);
+      room.roles = assignRoles(ids);
+      const alive = {}; ids.forEach(id=>alive[id]=true);
+      room.alive = alive;
+      room.phase = 'reveal';
+      room.round = 1;
+      room.log = [{type:'game_start'}];
+      room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
+      room.votes = {};
+      room.hunterPending = null;
+      room.winner = null;
+      room.revealDeadline = Date.now() + 25000;
+      broadcastState();
+    };
+  }
+}
+
+// ---------------- reveal ----------------
+let transitioning = false;
+let revealTicker = null;
+function ensureRevealTicker(){
+  if(revealTicker) return;
+  revealTicker = setInterval(()=>{
+    if(room && room.phase==='reveal'){
+      render();
+    } else {
+      clearInterval(revealTicker); revealTicker=null;
+    }
+  }, 1000);
+}
+function beginNightFromReveal(){
+  if(transitioning || !me.isHost) return;
+  transitioning = true;
+  room.phase = 'night';
+  room.log.push({type:'night_begin', round:room.round});
+  transitioning = false;
+  selection = null;
+  broadcastState();
+}
+
+function renderReveal(){
+  const s=t();
+  ensureRevealTicker();
+  const myRole = room.roles[me.id];
+  const rd = s.roles[myRole];
+  const isHost = me.isHost;
+  const remainingMs = (room.revealDeadline || 0) - Date.now();
+  const remaining = Math.max(0, Math.ceil(remainingMs/1000));
+
+  if(isHost && remaining<=0 && !transitioning){
+    beginNightFromReveal();
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="eyebrow">${s.nightEyebrow(room.round)}</div>
+    <h1>${s.revealTitle} <span>${s.revealAccent}</span></h1>
+    <div class="sub">${s.subReveal}</div>
+    <div class="card">
+      <div class="flipzone">
+        <div class="flipcard ${flipState.flipped?'flipped':''}" id="flipcard">
+          <div class="flipinner">
+            <div class="face front">
+              <div class="moonicon">🌙</div>
+              <div class="tapline">${s.tapReveal}</div>
+            </div>
+            <div class="face back">
+              <div class="roleicon">${ROLE_ICON[myRole]}</div>
+              <div class="rolename">${rd.name}</div>
+              <div class="roledesc">${rd.desc}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="progress">${s.autoStartIn(remaining)}</div>
+      ${isHost ? `<button class="ghost small" id="beginBtn">${s.beginNight}</button>` : ''}
+    </div>
+  `;
+  document.getElementById('flipcard').onclick = ()=>{
+    if(flipState.flipped) return;
+    flipState.flipped = true;
+    render();
+  };
+  if(isHost){
+    const bb = document.getElementById('beginBtn');
+    if(bb) bb.onclick = ()=> beginNightFromReveal();
+  }
+}
+
+function renderRoleBadge(){
+  const s=t();
+  const myRole = room.roles[me.id];
+  if(!myRole) return '';
+  const alive = room.alive[me.id];
+  return `<div class="center" style="margin-bottom:14px;"><span class="roletag">${ROLE_ICON[myRole]} ${s.yourRoleLabel}: ${s.roles[myRole].name}${alive?'':' 💀'}</span></div>`;
+}
+
+// ---------------- night ----------------
+function renderCardsGrid(playerList, opts){
+  const s=t();
+  const html = playerList.map(p=>{
+    const isDead = !room.alive[p.id];
+    const isSelected = opts.selectedId === p.id;
+    const disabled = (opts.disabledIds||[]).includes(p.id) || (isDead && !opts.deadSelectable);
+    return `<div class="pcard ${isDead?'dead':''} ${isSelected?'selected':''} ${disabled?'disabled':''}" data-id="${p.id}">
+      <div class="av">${avatarFor(p.id)}</div>
+      <div class="nm">${p.name}${p.id===me.id?' '+s.you:''}</div>
+      ${isDead && opts.showSkull!==false ? `<div class="skull">💀</div>` : ''}
+      ${opts.roleBadges && opts.roleBadges[p.id] ? `<div class="rolebadge">${opts.roleBadges[p.id]}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="grid">${html}</div>`;
+}
+
+function renderNight(){
+  const s=t();
+  const myRole = room.roles[me.id];
+  const amAlive = room.alive[me.id];
+  const isHost = me.isHost;
+  const targets = room.players.filter(p=>room.alive[p.id]);
+
+  let actionBlock = '';
+  let submitted = false;
+
+  if(!amAlive){
+    actionBlock = `<div class="sub center">${s.waitingNight}</div>`;
+  } else if(myRole==='werewolf'){
+    submitted = !!room.night.wolfVotes[me.id];
+    const disabledIds = room.players.filter(p=>room.roles[p.id]==='werewolf').map(p=>p.id);
+    actionBlock = `
+      <div class="sub center">${s.yourTurnWolf}</div>
+      ${renderCardsGrid(targets, {selectedId: selection || room.night.wolfVotes[me.id], disabledIds})}
+      <button id="submitBtn" ${submitted?'disabled':''}>${submitted? s.choiceLocked : s.submitChoice}</button>
+    `;
+  } else if(myRole==='seer'){
+    submitted = !!room.night.seerTarget[me.id];
+    const prevTarget = room.night.seerTarget[me.id];
+    actionBlock = `
+      <div class="sub center">${s.yourTurnSeer}</div>
+      ${renderCardsGrid(targets, {selectedId: selection || prevTarget, disabledIds:[me.id]})}
+      <button id="submitBtn" ${submitted?'disabled':''}>${submitted? s.choiceLocked : s.submitChoice}</button>
+      ${submitted ? `<div class="card" style="margin-top:14px;"><div class="roletag">👁️ ${playerName(room, prevTarget)}</div><div class="sub" style="margin:0;">${room.roles[prevTarget]==='werewolf' ? s.auraResultBad : s.auraResultGood}</div></div>` : ''}
+    `;
+  } else if(myRole==='doctor'){
+    submitted = !!room.night.doctorTarget[me.id];
+    actionBlock = `
+      <div class="sub center">${s.yourTurnDoctor}</div>
+      ${renderCardsGrid(targets, {selectedId: selection || room.night.doctorTarget[me.id]})}
+      <button id="submitBtn" ${submitted?'disabled':''}>${submitted? s.choiceLocked : s.submitChoice}</button>
+    `;
+  } else {
+    actionBlock = `<div class="sub center">${s.villagerNightNote}</div>`;
+  }
+
+  const actorsNeeded = room.players.filter(p=>['werewolf','seer','doctor'].includes(room.roles[p.id]) && room.alive[p.id]).length;
+  const actorsDone = Object.keys(room.night.wolfVotes).length + Object.keys(room.night.seerTarget).length + Object.keys(room.night.doctorTarget).length;
+
+  content.innerHTML = `
+    <div class="eyebrow">${s.nightEyebrow(room.round)}</div>
+    <h1>${s.nightTitle} <span>${s.nightAccent}</span></h1>
+    ${renderRoleBadge()}
+    <div class="card">
+      ${actionBlock}
+      <div class="progress">${s.nightProgress(actorsDone, actorsNeeded)}</div>
+      ${isHost ? `<button class="ghost small" id="resolveBtn">${s.resolveNight}</button>` : ''}
+    </div>
+  `;
+
+  document.querySelectorAll('.pcard').forEach(el=>{
+    if(el.classList.contains('disabled')) return;
+    el.onclick = ()=>{
+      selection = el.dataset.id;
+      render();
+    };
+  });
+  const sb = document.getElementById('submitBtn');
+  if(sb) sb.onclick = ()=>{
+    if(!selection && !room.night.wolfVotes[me.id] && !room.night.seerTarget[me.id] && !room.night.doctorTarget[me.id]) return;
+    const targetId = selection;
+    if(!targetId) return;
+
+    if (isHost) {
+      if(myRole==='werewolf') room.night.wolfVotes[me.id]=targetId;
+      if(myRole==='seer') room.night.seerTarget[me.id]=targetId;
+      if(myRole==='doctor') room.night.doctorTarget[me.id]=targetId;
+      selection = null;
+      broadcastState();
+    } else {
+      sendToHost({ action: 'NIGHT_SUBMIT', myRole, playerId: me.id, targetId });
+      selection = null;
+    }
+  };
+  const rb = document.getElementById('resolveBtn');
+  if(rb) rb.onclick = ()=> resolveNight();
+}
+
+function resolveNight(){
+  if (!me.isHost) return;
+  // tally wolf votes
+  const tally = {};
+  Object.values(room.night.wolfVotes).forEach(id=>{ tally[id]=(tally[id]||0)+1; });
+  let victim=null, max=0;
+  Object.entries(tally).forEach(([id,c])=>{ if(c>max){max=c; victim=id;} });
+  const protectedIds = new Set(Object.values(room.night.doctorTarget));
+  let died = null;
+  if(victim && !protectedIds.has(victim)){
+    room.alive[victim] = false;
+    died = victim;
+  }
+  if(died){
+    room.log.push({type:'deaths', ids:[died]});
+  } else {
+    room.log.push({type:'peaceful'});
+  }
+  // hunter check
+  if(died && room.roles[died]==='hunter'){
+    room.hunterPending = died;
+    room._returnPhase = 'night';
+    room.phase = 'night_hunter_revenge';
+  } else {
+    room.phase = 'day_reveal';
+  }
+  const win = checkWin(room);
+  if(win){ room.winner = win; room.phase='ended'; room.log.push({type: win==='villagers'?'win_villagers':'win_wolves'}); }
+  selection = null;
+  broadcastState();
+}
+
+function checkWin(r){
+  const wolves = aliveIds(r).filter(id=>r.roles[id]==='werewolf').length;
+  const others = aliveIds(r).length - wolves;
+  if(wolves===0) return 'villagers';
+  if(wolves>=others) return 'wolves';
+  return null;
+}
+
+// ---------------- hunter revenge ----------------
+function renderHunterRevenge(){
+  const s=t();
+  const isMe = room.hunterPending === me.id;
+  const isHost = me.isHost;
+  const targets = room.players.filter(p=>room.alive[p.id] && p.id!==room.hunterPending);
+  content.innerHTML = `
+    <div class="eyebrow">${s.nightEyebrow(room.round)}</div>
+    <h1>${s.hunterRevengeTitle} <span>${s.hunterRevengeAccent}</span></h1>
+    <div class="sub">${isMe ? s.subHunterRevenge : s.subHunterRevengeWatch}</div>
+    ${renderRoleBadge()}
+    <div class="card">
+      ${isMe ? `
+        ${renderCardsGrid(targets, {selectedId: selection})}
+        <button id="shotBtn" ${!selection?'disabled':''}>${s.confirmShot}</button>
+      ` : `<div class="sub center pulse">🏹</div>`}
+    </div>
+  `;
+  if(isMe){
+    document.querySelectorAll('.pcard').forEach(el=>{
+      if(el.classList.contains('disabled')) return;
+      el.onclick=()=>{ selection=el.dataset.id; render(); };
+    });
+    const btn = document.getElementById('shotBtn');
+    if(btn) btn.onclick = ()=>{
+      if(!selection) return;
+      if (isHost) {
+        const shooter = room.hunterPending;
+        const targetId = selection;
+        room.alive[targetId] = false;
+        room.log.push({type:'hunter_shot', a: shooter, b: targetId});
+        room.hunterPending = null;
+        const cameFromDay = room._returnPhase === 'day';
+        room._returnPhase = null;
+        const win = checkWin(room);
+        if(win){
+          room.winner=win; room.phase='ended'; room.log.push({type: win==='villagers'?'win_villagers':'win_wolves'});
+        } else if(cameFromDay){
+          room.round += 1;
+          room.phase = 'night';
+          room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
+          room.log.push({type:'night_begin', round:room.round});
+        } else {
+          room.phase = 'day_reveal';
+        }
+        selection = null;
+        broadcastState();
+      } else {
+        sendToHost({ action: 'HUNTER_SHOT', targetId: selection });
+        selection = null;
+      }
+    };
+  }
+}
+
+// ---------------- day reveal ----------------
+function renderLogPanel(){
+  const s=t();
+  const items = (room.log||[]).map(ev=>{
+    let cls=''; let txt='';
+    switch(ev.type){
+      case 'game_start': txt=s.log_game_start; break;
+      case 'night_begin': txt=s.log_night_begin(ev.round); break;
+      case 'peaceful': txt=s.log_peaceful; cls='safe'; break;
+      case 'deaths': txt=s.log_deaths(ev.ids.map(id=>playerName(room,id)).join(', ')); cls='death'; break;
+      case 'hunter_shot': txt=s.log_hunter_shot(playerName(room,ev.a), playerName(room,ev.b)); cls='death'; break;
+      case 'vote_tie': txt=s.log_vote_tie; break;
+      case 'vote_result': txt=s.log_vote_result(playerName(room,ev.id), roleName(room,ev.id)); cls='death'; break;
+      case 'win_villagers': txt=s.log_win_villagers; cls='win'; break;
+      case 'win_wolves': txt=s.log_win_wolves; cls='win'; break;
+      default: txt='';
+    }
+    return txt ? `<div class="entry ${cls}">${txt}</div>` : '';
+  }).join('');
+  return `<div class="log">${items}</div>`;
+}
+
+function renderDayReveal(){
+  const s=t();
+  const isHost = me.isHost;
+  content.innerHTML = `
+    <div class="eyebrow">${s.dayEyebrow(room.round)}</div>
+    <h1>${s.dayTitle} <span>${s.dayAccent}</span></h1>
+    ${renderRoleBadge()}
+    <div class="card">
+      ${renderLogPanel()}
+      ${isHost ? `<button id="voteBtn">${s.continueToVote}</button>` : `<div class="sub center" style="margin-top:14px;">${s.waitingVote}</div>`}
+    </div>
+  `;
+  if(isHost){
+    document.getElementById('voteBtn').onclick = ()=>{
+      room.phase = 'voting';
+      room.votes = {};
+      broadcastState();
+    };
+  }
+}
+
+// ---------------- voting ----------------
+function renderVoting(){
+  const s=t();
+  const isHost = me.isHost;
+  const amAlive = room.alive[me.id];
+  const targets = room.players.filter(p=>room.alive[p.id]);
+  const myVote = room.votes[me.id];
+  content.innerHTML = `
+    <div class="eyebrow">${s.dayEyebrow(room.round)}</div>
+    <h1>${s.votingTitle} <span>${s.votingAccent}</span></h1>
+    <div class="sub">${s.subVoting}</div>
+    ${renderRoleBadge()}
+    <div class="card">
+      ${amAlive ? `
+        ${renderCardsGrid(targets, {selectedId: selection || myVote, disabledIds: myVote?targets.map(p=>p.id):[me.id]})}
+        <button id="voteSubmit" ${myVote?'disabled':''}>${myVote? s.voteLocked : s.voteFor}</button>
+      ` : `<div class="sub center">${s.waitingVote}</div>${renderCardsGrid(targets, {selectedId:null, disabledIds: targets.map(p=>p.id)})}`}
+      <div class="progress">${s.voteProgress(Object.keys(room.votes).length, aliveIds(room).length)}</div>
+      ${isHost ? `<button class="ghost small" id="resolveVoteBtn">${s.resolveVote}</button>` : ''}
+    </div>
+  `;
+  if(amAlive && !myVote){
+    document.querySelectorAll('.pcard').forEach(el=>{
+      if(el.classList.contains('disabled')) return;
+      el.onclick=()=>{ selection=el.dataset.id; render(); };
+    });
+    const vb = document.getElementById('voteSubmit');
+    if(vb) vb.onclick = ()=>{
+      if(!selection) return;
+      if (isHost) {
+        room.votes[me.id] = selection;
+        selection = null;
+        broadcastState();
+      } else {
+        sendToHost({ action: 'VOTE_SUBMIT', playerId: me.id, targetId: selection });
+        selection = null;
+      }
+    };
+  }
+  if(isHost){
+    document.getElementById('resolveVoteBtn').onclick = ()=> resolveVote();
+  }
+}
+
+function resolveVote(){
+  if (!me.isHost) return;
+  const tally = {};
+  Object.values(room.votes).forEach(id=>{ tally[id]=(tally[id]||0)+1; });
+  let top=null, max=0, tie=false;
+  Object.entries(tally).forEach(([id,c])=>{
+    if(c>max){max=c; top=id; tie=false;}
+    else if(c===max){tie=true;}
+  });
+  if(top && !tie){
+    room.alive[top] = false;
+    room.log.push({type:'vote_result', id:top});
+    if(room.roles[top]==='hunter'){
+      room.hunterPending = top;
+      room._returnPhase = 'day';
+      room.phase = 'day_hunter_revenge';
+      broadcastState();
+      return;
+    }
+  } else {
+    room.log.push({type:'vote_tie'});
+  }
+  const win = checkWin(room);
+  if(win){
+    room.winner = win;
+    room.phase = 'ended';
+    room.log.push({type: win==='villagers'?'win_villagers':'win_wolves'});
+  } else {
+    room.round += 1;
+    room.phase = 'night';
+    room.night = {wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
+    room.log.push({type:'night_begin', round:room.round});
+  }
+  selection = null;
+  broadcastState();
+}
+
+// ---------------- ended ----------------
+function renderEnded(){
+  const s=t();
+  const isHost = me.isHost;
+  const winText = room.winner==='villagers' ? s.winVillagers : s.winWolves;
+  const rolesList = room.players.map(p=>{
+    const dead = !room.alive[p.id];
+    return `<li><span><span class="dot"></span>${p.name}${dead?' 💀':''}</span><span style="color:var(--dim); font-family:'Courier New',monospace; font-size:12px;">${ROLE_ICON[room.roles[p.id]]} ${roleName(room,p.id)}</span></li>`;
+  }).join('');
+  content.innerHTML = `
+    <div class="eyebrow">${s.endEyebrow}</div>
+    <h1 style="color:${room.winner==='villagers'?'var(--good)':'var(--blood)'}">${winText}</h1>
+    <div class="card">
+      ${renderLogPanel()}
+      <label>${s.finalRoles}</label>
+      <ul class="plist">${rolesList}</ul>
+      ${isHost ? `<button id="againBtn">${s.playAgain}</button>` : ''}
+      <button class="ghost small" id="exitBtn">${s.exitGame}</button>
+    </div>
+  `;
+  document.getElementById('exitBtn').onclick=()=>{ resetPeer(); roomCode=''; room=null; screen='landing'; flipState={flipped:false,ready:false}; render(); };
+  if(isHost){
+    document.getElementById('againBtn').onclick = ()=>{
+      const ids = room.players.map(p=>p.id);
+      room.roles = assignRoles(ids);
+      const alive={}; ids.forEach(id=>alive[id]=true);
+      room.alive = alive;
+      room.phase='reveal';
+      room.round=1;
+      room.log=[{type:'game_start'}];
+      room.night={wolfVotes:{}, doctorTarget:{}, seerTarget:{}};
+      room.votes={};
+      room.hunterPending=null;
+      room.winner=null;
+      room.revealDeadline = Date.now() + 25000;
+      flipState={flipped:false, ready:false};
+      broadcastState();
+    };
+  }
+}
+
+setLang('en');
+</script>
+</body>
+</html>
